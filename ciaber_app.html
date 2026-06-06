@@ -606,20 +606,16 @@ function renderClientes(){
   document.getElementById('root').innerHTML=`<div class="lista-c">${lista.map(c=>{
     const ci=clientes.indexOf(c);
     const strip=COLOR_HEX[c.color]||'#305496';
-    return `<div class="it-wrap">
+    return `<div class="it-wrap" data-ek="c-${ci}">
       <div class="it-row" onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='BUTTON'||event.target.tagName==='SELECT')return;abrirCliente(${ci})">
         <div class="it-strip" style="background:${strip}"></div>
-        <span class="it-arrow" style="transform:rotate(90deg)">▶</span>
+        <span class="it-arrow" style="transform:rotate(90deg);cursor:default">▶</span>
         <input class="nm-c" data-path="${ci}|c" data-k="nombre" value="${ESC(c.nombre)}" onclick="event.stopPropagation()">
         <div class="it-meta">
           <select class="est-cliente ${EC_CLASS[c.estado||'Activo']}" data-path="${ci}|c" data-k="estadoCliente" onclick="event.stopPropagation()">${opt(ESTADOS_CLIENTE,c.estado||'Activo')}</select>
           <span class="it-count">${c.proyectos.length} proy.</span>
           <button class="del it-del" onclick="event.stopPropagation();delCliente(${ci})">✕</button>
         </div>
-      </div>
-      <div class="it-body" style="display:none">
-        <div class="nota-box"><textarea data-path="${ci}|c" data-k="notaCliente" placeholder="Notas, contacto...">${ESC(c.nota||'')}</textarea></div>
-        <button class="add" onclick="abrirCliente(${ci})" style="border-color:#bae6fd;color:#0369a1">📁 Ver proyectos (${c.proyectos.length})</button>
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -656,10 +652,10 @@ function renderProyectos(ci){
     const total=t.length+t.reduce((a,x)=>a+(x.subtareas||[]).length,0);
     const pct=pctOf(t);
     const strip=COLOR_HEX[p.color]||'#305496';
-    return `<div class="it-wrap">
-      <div class="it-row" onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='BUTTON'||event.target.tagName==='SELECT')return;const b=this.nextElementSibling;this.classList.toggle('it-open');b.style.display=this.classList.contains('it-open')?'block':'none'">
+    return `<div class="it-wrap" data-ek="p-${ci}-${pi}">
+      <div class="it-row">
         <div class="it-strip" style="background:${strip}"></div>
-        <span class="it-arrow">▶</span>
+        <span class="it-arrow" onclick="toggleExpand(this)" title="Expandir/Contraer" style="cursor:pointer;padding:12px 6px">▶</span>
         <input class="nm-c" data-path="${ci}|p|${pi}" data-k="nombre" value="${ESC(p.nombre)}" onclick="event.stopPropagation()">
         <div class="it-meta">
           <select class="est-trabajo ${ET_CLASS[p.estadoTrabajo||'Sin Iniciar']||'etj-SinIniciar'}" data-path="${ci}|p|${pi}" data-k="estadoTrabajo" onclick="event.stopPropagation()">${optTrabajo(p.estadoTrabajo||'Sin Iniciar')}</select>
@@ -677,7 +673,51 @@ function renderProyectos(ci){
 
 function abrirCliente(ci){vistaActual='proyectos';clienteActual=ci;renderVista();}
 function volverClientes(){vistaActual='clientes';clienteActual=null;document.getElementById('filtroEstado').innerHTML='<option value="">📋 Todos los estados</option>';document.getElementById('filtroAbono').style.display='none';renderVista();}
-function renderVista(){if(vistaActual==='proyectos'&&clienteActual!=null)renderProyectos(clienteActual);else renderClientes();}
+
+// === Preservar estado expandido entre re-renders ===
+const expandedKeys=new Set();
+
+function captureExpanded(){
+  document.querySelectorAll('.it-wrap[data-ek]').forEach(w=>{
+    if(w.querySelector('.it-body[style*="block"],.it-body:not([style])'))return;
+    const body=w.querySelector('.it-body');
+    if(body&&body.style.display==='block') expandedKeys.add(w.dataset.ek);
+  });
+  // método más confiable: buscar rows con clase it-open
+  document.querySelectorAll('.it-wrap[data-ek]').forEach(w=>{
+    if(w.querySelector('.it-row.it-open')) expandedKeys.add(w.dataset.ek);
+    else expandedKeys.delete(w.dataset.ek);
+  });
+}
+
+function restoreExpanded(){
+  document.querySelectorAll('.it-wrap[data-ek]').forEach(w=>{
+    if(expandedKeys.has(w.dataset.ek)){
+      const row=w.querySelector('.it-row');
+      const body=w.querySelector('.it-body');
+      if(row) row.classList.add('it-open');
+      if(body) body.style.display='block';
+    }
+  });
+}
+
+function toggleExpand(arrow){
+  const wrap=arrow.closest('.it-wrap');
+  const row=wrap.querySelector('.it-row');
+  const body=wrap.querySelector('.it-body');
+  const isOpen=row.classList.contains('it-open');
+  row.classList.toggle('it-open',!isOpen);
+  if(body) body.style.display=isOpen?'none':'block';
+  if(!isOpen) expandedKeys.add(wrap.dataset.ek);
+  else expandedKeys.delete(wrap.dataset.ek);
+}
+
+function renderVista(){
+  captureExpanded();
+  if(vistaActual==='proyectos'&&clienteActual!=null) renderProyectos(clienteActual);
+  else renderClientes();
+  restoreExpanded();
+}
 
 // ============================================================
 // EVENTOS DE EDICIÓN
