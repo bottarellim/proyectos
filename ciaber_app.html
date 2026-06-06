@@ -826,21 +826,35 @@ function importJSON(ev){
   };r.readAsText(f);
 }
 function exportXLSX(){
-  const rows=[['Cliente','Proyecto','Estado Proyecto','Abono','Subpunto','ID','Tarea','Estado','Prioridad']];
+  const rows=[['Cliente','Estado Cliente','Proyecto','Estado Proyecto','Abono','% Avance','Nota Proyecto','Subpunto','ID Tarea','Tarea','Estado Tarea','Prioridad']];
   clientes.forEach(c=>{
+    if(!c.proyectos||!c.proyectos.length){
+      rows.push([c.nombre,c.estado||'','','','','','','','','','','']);
+      return;
+    }
     c.proyectos.forEach(p=>{
+      const allT=allTareasProy(p);
+      const pct=pctOf(allT);
       const proc=(arr,sub)=>arr.forEach(t=>{
-        rows.push([c.nombre,p.nombre,p.estadoTrabajo||'',p.abono||'',sub||'',t.id,t.tarea,t.estado,t.prioridad]);
-        (t.subtareas||[]).forEach(st=>rows.push([c.nombre,p.nombre,p.estadoTrabajo||'',p.abono||'',sub||'',t.id+'.'+st.id,st.tarea,st.estado,st.prioridad]));
+        rows.push([c.nombre,c.estado||'',p.nombre,p.estadoTrabajo||'',p.abono||'',pct+'%',p.nota||'',sub||'',t.id||'',t.tarea,t.estado,t.prioridad||'']);
+        (t.subtareas||[]).forEach(st=>rows.push([c.nombre,c.estado||'',p.nombre,p.estadoTrabajo||'',p.abono||'',pct+'%',p.nota||'',sub||'','  └'+(st.id||''),st.tarea,st.estado,st.prioridad||'']));
       });
-      if(p.subpuntos&&p.subpuntos.length)p.subpuntos.forEach(s=>proc(s.tareas||[],s.nombre));
-      else proc(p.tareas||[],'');
+      if(p.subpuntos&&p.subpuntos.length){
+        p.subpuntos.forEach(s=>proc(s.tareas||[],s.nombre));
+      } else {
+        proc(p.tareas||[],'');
+      }
+      if(!allT.length){
+        rows.push([c.nombre,c.estado||'',p.nombre,p.estadoTrabajo||'',p.abono||'',pct+'%',p.nota||'','','','(sin tareas)','','']);
+      }
     });
   });
   const ws=XLSX.utils.aoa_to_sheet(rows);
-  ws['!cols']=[{wch:20},{wch:35},{wch:22},{wch:12},{wch:18},{wch:6},{wch:45},{wch:12},{wch:10}];
-  const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Proyectos');
-  XLSX.writeFile(wb,`ciaber_${new Date().toISOString().slice(0,10)}.xlsx`);
+  ws['!cols']=[{wch:22},{wch:12},{wch:35},{wch:22},{wch:12},{wch:8},{wch:30},{wch:18},{wch:6},{wch:40},{wch:14},{wch:8}];
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,'Proyectos',ws);
+  XLSX.writeFile(wb,'ciaber_'+new Date().toISOString().slice(0,10)+'.xlsx');
 }
 </script>
-</body></html>
+</body>
+</html>
