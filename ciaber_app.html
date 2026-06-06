@@ -580,7 +580,7 @@ function renderProyectoBody(p,ci,pi){
       </div>
       <div class="adj-list">${adjItems}</div>
     </div>
-    <div class="tareas-toggle" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none'">
+    <div class="tareas-toggle" data-tkey="tareas-${ci}-${pi}" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('tareas-${ci}-${pi}');else expandedKeys.delete('tareas-${ci}-${pi}')">
       <span class="t-arrow">▶</span> Tareas <span style="color:#9ca3af;font-weight:400">(${total})</span>
     </div>
     <div style="display:none">${tareasHtml}</div>`;
@@ -679,20 +679,8 @@ function volverClientes(){vistaActual='clientes';clienteActual=null;document.get
 // === Preservar estado expandido entre re-renders ===
 const expandedKeys=new Set();
 
-function captureExpanded(){
-  document.querySelectorAll('.it-wrap[data-ek]').forEach(w=>{
-    if(w.querySelector('.it-body[style*="block"],.it-body:not([style])'))return;
-    const body=w.querySelector('.it-body');
-    if(body&&body.style.display==='block') expandedKeys.add(w.dataset.ek);
-  });
-  // método más confiable: buscar rows con clase it-open
-  document.querySelectorAll('.it-wrap[data-ek]').forEach(w=>{
-    if(w.querySelector('.it-row.it-open')) expandedKeys.add(w.dataset.ek);
-    else expandedKeys.delete(w.dataset.ek);
-  });
-}
-
 function restoreExpanded(){
+  // Restaurar proyectos expandidos
   document.querySelectorAll('.it-wrap[data-ek]').forEach(w=>{
     if(expandedKeys.has(w.dataset.ek)){
       const row=w.querySelector('.it-row');
@@ -701,9 +689,17 @@ function restoreExpanded(){
       if(body) body.style.display='block';
     }
   });
+  // Restaurar toggles de tareas abiertos
+  document.querySelectorAll('.tareas-toggle[data-tkey]').forEach(tog=>{
+    if(expandedKeys.has(tog.dataset.tkey)){
+      tog.classList.add('t-open');
+      if(tog.nextElementSibling) tog.nextElementSibling.style.display='block';
+    }
+  });
 }
 
 function toggleExpand(arrow){
+  arrow.stopPropagation&&arrow.stopPropagation();
   const wrap=arrow.closest('.it-wrap');
   const row=wrap.querySelector('.it-row');
   const body=wrap.querySelector('.it-body');
@@ -715,7 +711,6 @@ function toggleExpand(arrow){
 }
 
 function renderVista(){
-  captureExpanded();
   if(vistaActual==='proyectos'&&clienteActual!=null) renderProyectos(clienteActual);
   else renderClientes();
   restoreExpanded();
