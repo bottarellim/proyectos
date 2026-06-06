@@ -51,27 +51,45 @@ button.btn-adj{background:#fff;color:#0369a1;border:1px solid #bae6fd;font-size:
 .filtros input{width:230px}
 #filtroCount{font-size:12px;color:#6b7280}
 
-/* === Lista compacta === */
-.lista-c{background:#fff;border-radius:8px;box-shadow:0 1px 4px rgba(0,0,0,.08);overflow:hidden}
-.it-wrap{border-bottom:1px solid #f1f5f9}
+/* === Lista compacta — estilo oscuro azul === */
+.lista-c{border-radius:12px;overflow:hidden;box-shadow:0 4px 20px rgba(30,58,110,.2)}
+.it-wrap{border-bottom:1px solid rgba(255,255,255,.08);position:relative}
 .it-wrap:last-child{border-bottom:none}
-.it-row{display:flex;align-items:center;gap:7px;padding:0 12px 0 0;cursor:pointer;transition:background .1s;min-height:40px}
-.it-row:hover{background:#f0f4ff}
-.it-row.it-open{background:linear-gradient(90deg,#e8f0fe 0%,#f0f6ff 100%);border-left:3px solid #305496}
-.it-wrap.expanded{box-shadow:0 2px 12px rgba(48,84,150,.1);border-radius:0;z-index:1;position:relative}
-.it-strip{width:5px;min-height:40px;flex-shrink:0;align-self:stretch;transition:width .15s}
-.it-row.it-open .it-strip{width:6px}
-.it-arrow{font-size:10px;color:#9ca3af;transition:transform .18s;flex-shrink:0;padding:0 3px}
-.it-row.it-open .it-arrow{transform:rotate(90deg);color:#305496}
-input.nm-c{flex:1;min-width:0;font-size:13px;font-weight:500;background:transparent;border:1px solid transparent;border-radius:4px;padding:3px 6px;color:#1f2937;font-family:inherit}
-input.nm-c:hover,input.nm-c:focus{border-color:#bfdbfe;background:#fff;outline:none}
-.it-row.it-open input.nm-c{font-weight:600;color:#1e3a6e}
+.it-wrap.expanded{box-shadow:0 6px 24px rgba(30,58,110,.25);z-index:1;position:relative}
+
+/* Fila: azul oscuro, texto blanco */
+.it-row{display:flex;align-items:center;gap:8px;padding:0 14px 0 0;cursor:pointer;transition:all .15s;min-height:46px;background:linear-gradient(135deg,#1e3a6e 0%,#254282 100%);color:#fff}
+.it-row:hover{background:linear-gradient(135deg,#162d58 0%,#1e3a6e 100%);padding-left:2px}
+.it-row.it-open{background:linear-gradient(135deg,#0f2040 0%,#1a3060 100%)}
+.it-strip{width:4px;min-height:46px;flex-shrink:0;align-self:stretch;background:rgba(255,255,255,.2);transition:background .2s}
+.it-wrap.expanded .it-strip{background:#10b981;width:5px}
+
+.it-arrow{font-size:11px;color:rgba(255,255,255,.5);transition:transform .2s,color .2s;flex-shrink:0;padding:0 4px}
+.it-row.it-open .it-arrow{transform:rotate(90deg);color:#7dd3fc}
+
+input.nm-c{flex:1;min-width:0;font-size:13px;font-weight:600;background:transparent;border:1px solid transparent;border-radius:6px;padding:4px 8px;color:#fff;font-family:inherit;letter-spacing:.01em}
+input.nm-c::placeholder{color:rgba(255,255,255,.4)}
+input.nm-c:hover,input.nm-c:focus{border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.08);outline:none}
+
 .it-meta{display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap}
-.it-pct{font-size:11px;color:#9ca3af;white-space:nowrap;min-width:46px;text-align:right}
-.it-fecha{font-size:10px;color:#9ca3af;white-space:nowrap}
-.it-del{opacity:0;transition:opacity .12s}
+.it-pct{font-size:11px;color:rgba(255,255,255,.6);white-space:nowrap;min-width:46px;text-align:right}
+.it-fecha{font-size:10px;color:rgba(255,255,255,.5);white-space:nowrap}
+.it-del{opacity:0;transition:opacity .15s;background:rgba(220,38,38,.3);border-color:rgba(255,255,255,.2);color:#fca5a5}
 .it-row:hover .it-del{opacity:1}
-.it-body{padding:8px 16px 14px;background:#f8faff;border-top:2px solid #bfdbfe;border-left:3px solid #305496}
+.it-count{font-size:11px;color:rgba(255,255,255,.8);background:rgba(255,255,255,.12);border-radius:10px;padding:2px 9px;border:1px solid rgba(255,255,255,.15)}
+
+/* Body expandido — blanco limpio con acento azul */
+.it-body,.it-body-c{padding:14px 20px 16px;background:#fff;border-top:none;border-left:4px solid #305496;box-shadow:inset 0 2px 8px rgba(30,58,110,.06)}
+
+/* Selects sobre fondo azul */
+select.est-trabajo{border:none;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;outline:none;max-width:175px;font-family:inherit}
+select.est-abono{border:none;border-radius:12px;padding:2px 7px;font-size:11px;font-weight:700;cursor:pointer;outline:none;font-family:inherit}
+select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px;font-weight:700;cursor:pointer;outline:none;font-family:inherit;background:rgba(255,255,255,.15);color:#fff}
+select.est-cliente option{color:#1f2937;background:#fff}
+
+/* Botones sobre fondo azul */
+.btn-share{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.25);color:#fff;border-radius:6px;padding:3px 9px;font-size:11px;cursor:pointer;transition:background .15s}
+.btn-share:hover{background:rgba(255,255,255,.25)}
 .it-count{font-size:11px;color:#6b7280;background:#f1f5f9;border-radius:10px;padding:1px 8px}
 
 /* === Badges === */
@@ -786,19 +804,15 @@ function renderClientes(){
     const ci=clientes.indexOf(c);
     const strip=COLOR_HEX[c.color]||'#305496';
     return `<div class="it-wrap" data-ek="c-${ci}">
-      <div class="it-row" onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='BUTTON'||event.target.tagName==='SELECT')return;toggleItem(this)">
-        <div class="it-strip" style="background:${strip}"></div>
-        <span class="it-arrow">▶</span>
+      <div class="it-row" onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='BUTTON'||event.target.tagName==='SELECT')return;abrirCliente(${ci})">
+        <div class="it-strip"></div>
+        <span class="it-arrow" style="transform:rotate(90deg)">▶</span>
         <input class="nm-c" data-path="${ci}|c" data-k="nombre" value="${ESC(c.nombre)}" onclick="event.stopPropagation()">
         <div class="it-meta">
           <select class="est-cliente ${EC_CLASS[c.estado||'Activo']}" data-path="${ci}|c" data-k="estadoCliente" onclick="event.stopPropagation()">${opt(ESTADOS_CLIENTE,c.estado||'Activo')}</select>
-          <span class="it-count">${c.proyectos.length} proy.</span>
-          <button class="add" onclick="event.stopPropagation();abrirCliente(${ci})" style="border-color:#bae6fd;color:#0369a1;margin:0">📁 Abrir</button>
+          <span class="it-count">${c.proyectos.length} proyecto${c.proyectos.length!==1?'s':''}</span>
           <button class="del it-del" onclick="event.stopPropagation();delCliente(${ci})">✕</button>
         </div>
-      </div>
-      <div class="it-body it-body-c" style="display:none">
-        <div class="nota-box"><textarea data-path="${ci}|c" data-k="notaCliente" placeholder="Notas, contacto...">${ESC(c.nota||'')}</textarea></div>
       </div>
     </div>`;
   }).join('')}</div>`;
