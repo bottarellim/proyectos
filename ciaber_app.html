@@ -56,19 +56,22 @@ button.btn-adj{background:#fff;color:#0369a1;border:1px solid #bae6fd;font-size:
 .it-wrap{border-bottom:1px solid #f1f5f9}
 .it-wrap:last-child{border-bottom:none}
 .it-row{display:flex;align-items:center;gap:7px;padding:0 12px 0 0;cursor:pointer;transition:background .1s;min-height:40px}
-.it-row:hover{background:#f8fafc}
-.it-row.it-open{background:#eff6ff}
-.it-strip{width:5px;min-height:40px;flex-shrink:0;align-self:stretch}
+.it-row:hover{background:#f0f4ff}
+.it-row.it-open{background:linear-gradient(90deg,#e8f0fe 0%,#f0f6ff 100%);border-left:3px solid #305496}
+.it-wrap.expanded{box-shadow:0 2px 12px rgba(48,84,150,.1);border-radius:0;z-index:1;position:relative}
+.it-strip{width:5px;min-height:40px;flex-shrink:0;align-self:stretch;transition:width .15s}
+.it-row.it-open .it-strip{width:6px}
 .it-arrow{font-size:10px;color:#9ca3af;transition:transform .18s;flex-shrink:0;padding:0 3px}
-.it-row.it-open .it-arrow{transform:rotate(90deg)}
+.it-row.it-open .it-arrow{transform:rotate(90deg);color:#305496}
 input.nm-c{flex:1;min-width:0;font-size:13px;font-weight:500;background:transparent;border:1px solid transparent;border-radius:4px;padding:3px 6px;color:#1f2937;font-family:inherit}
-input.nm-c:hover,input.nm-c:focus{border-color:#d1d5db;background:#fff;outline:none}
+input.nm-c:hover,input.nm-c:focus{border-color:#bfdbfe;background:#fff;outline:none}
+.it-row.it-open input.nm-c{font-weight:600;color:#1e3a6e}
 .it-meta{display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap}
 .it-pct{font-size:11px;color:#9ca3af;white-space:nowrap;min-width:46px;text-align:right}
 .it-fecha{font-size:10px;color:#9ca3af;white-space:nowrap}
 .it-del{opacity:0;transition:opacity .12s}
 .it-row:hover .it-del{opacity:1}
-.it-body{padding:6px 14px 12px;background:#fafbfc;border-top:1px solid #f1f5f9}
+.it-body{padding:8px 16px 14px;background:#f8faff;border-top:2px solid #bfdbfe;border-left:3px solid #305496}
 .it-count{font-size:11px;color:#6b7280;background:#f1f5f9;border-radius:10px;padding:1px 8px}
 
 /* === Badges === */
@@ -268,6 +271,7 @@ let onlineUsers = new Set();
 let shareModal_ci = null;
 let shareModal_pi = null;
 let presenceChannel = null;
+const expandedKeys = new Set(); // preserva items expandidos entre renders
 
 // ============================================================
 // AUTH
@@ -368,34 +372,50 @@ async function initData(){
   setSyncDot(false);
   try{
     const {data:row,error}=await sb.from('app_data').select('clientes').eq('id',1).single();
+
+    if(error && error.code!=='PGRST116'){
+      // Error real de conexión — usar backup local, NO tocar Supabase
+      throw error;
+    }
+
     if(row?.clientes&&row.clientes.length>0){
+      // ✅ HAY DATOS en Supabase — cargarlos
       clientes=fixClientes(row.clientes);
-      // Migrar: asignar propietario a proyectos sin propietario
+      // Migración silenciosa: agregar propietario si falta
       let migrado=false;
       clientes.forEach(c=>c.proyectos.forEach(p=>{
         if(!p.propietario_email){p.propietario_email=SUPER_ADMIN;p.compartido_con=p.compartido_con||[];migrado=true;}
       }));
-      if(migrado)await saveToSupabase();
-    } else {
-      // Primera vez — intentar migrar desde localStorage
-      const local=localStorage.getItem('ciaber_puntos_v3');
+      if(migrado){
+        localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
+        await saveToSupabase();
+      }
+    } else if(!row || (row.clientes&&row.clientes.length===0)){
+      // ⚠ Supabase vacío — solo poblar si realmente es primera vez
+      // Verificar si hay backup local antes de crear datos nuevos
       const localV2=localStorage.getItem('ciaber_v2');
+      const local=localStorage.getItem('ciaber_puntos_v3');
       if(localV2){
         try{const d=JSON.parse(localV2);clientes=fixClientes(d.clientes||[]);}catch(e){}
       } else if(local){
         try{clientes=migrarDesdeFormatoViejo(JSON.parse(local));}catch(e){}
       }
-      if(!clientes.length){clientes=[{id:newId(),nombre:'Ciaber',estado:'Activo',nota:'',color:null,proyectos:[]}];}
+      if(!clientes.length){
+        clientes=[{id:newId(),nombre:'Ciaber',estado:'Activo',nota:'',color:null,proyectos:[],propietario_email:SUPER_ADMIN}];
+      }
+      // Guardar en Supabase solo si efectivamente está vacío
       await saveToSupabase();
     }
+
     setSyncDot(true);
     renderVista();
   }catch(e){
     console.error('Error cargando datos:',e);
     setSyncDot(false);
-    showSaved('⚠ Error de conexión — trabajando sin conexión');
-    const local=localStorage.getItem('ciaber_v2');
-    if(local){try{const d=JSON.parse(local);clientes=fixClientes(d.clientes||[]);}catch(e2){}}
+    showSaved('⚠ Sin conexión — mostrando último backup local');
+    // Cargar desde backup LOCAL sin tocar Supabase
+    const localV2=localStorage.getItem('ciaber_v2');
+    if(localV2){try{const d=JSON.parse(localV2);clientes=fixClientes(d.clientes||[]);}catch(e2){}}
     renderVista();
   }
 }
@@ -403,10 +423,11 @@ async function initData(){
 async function saveToSupabase(){
   if(_saving)return;
   _saving=true;
+  // Siempre guardar backup local primero
+  localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
   try{
-    await sb.from('app_data').upsert({id:1,clientes,updated_at:new Date().toISOString()});
-    // backup local
-    localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
+    const {error}=await sb.from('app_data').upsert({id:1,clientes,updated_at:new Date().toISOString()});
+    if(error)console.error('Error guardando en Supabase:',error);
   }catch(e){console.error('Error guardando:',e);}
   _saving=false;
 }
@@ -764,20 +785,20 @@ function renderClientes(){
   document.getElementById('root').innerHTML=`<div class="lista-c">${lista.map(c=>{
     const ci=clientes.indexOf(c);
     const strip=COLOR_HEX[c.color]||'#305496';
-    return `<div class="it-wrap">
-      <div class="it-row" onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='BUTTON'||event.target.tagName==='SELECT')return;abrirCliente(${ci})">
+    return `<div class="it-wrap" data-ek="c-${ci}">
+      <div class="it-row" onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='BUTTON'||event.target.tagName==='SELECT')return;toggleItem(this)">
         <div class="it-strip" style="background:${strip}"></div>
-        <span class="it-arrow" style="transform:rotate(90deg)">▶</span>
+        <span class="it-arrow">▶</span>
         <input class="nm-c" data-path="${ci}|c" data-k="nombre" value="${ESC(c.nombre)}" onclick="event.stopPropagation()">
         <div class="it-meta">
           <select class="est-cliente ${EC_CLASS[c.estado||'Activo']}" data-path="${ci}|c" data-k="estadoCliente" onclick="event.stopPropagation()">${opt(ESTADOS_CLIENTE,c.estado||'Activo')}</select>
           <span class="it-count">${c.proyectos.length} proy.</span>
+          <button class="add" onclick="event.stopPropagation();abrirCliente(${ci})" style="border-color:#bae6fd;color:#0369a1;margin:0">📁 Abrir</button>
           <button class="del it-del" onclick="event.stopPropagation();delCliente(${ci})">✕</button>
         </div>
       </div>
-      <div class="it-body" style="display:none">
+      <div class="it-body it-body-c" style="display:none">
         <div class="nota-box"><textarea data-path="${ci}|c" data-k="notaCliente" placeholder="Notas, contacto...">${ESC(c.nota||'')}</textarea></div>
-        <button class="add" onclick="abrirCliente(${ci})" style="border-color:#bae6fd;color:#0369a1">📁 Ver proyectos (${c.proyectos.length})</button>
       </div>
     </div>`;
   }).join('')}</div>`;
@@ -815,8 +836,8 @@ function renderProyectos(ci){
     const total=t.length+t.reduce((a,x)=>a+(x.subtareas||[]).length,0);
     const pct=pctOf(t);
     const strip=COLOR_HEX[p.color]||'#305496';
-    return `<div class="it-wrap">
-      <div class="it-row" onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='BUTTON'||event.target.tagName==='SELECT')return;const b=this.nextElementSibling;this.classList.toggle('it-open');b.style.display=this.classList.contains('it-open')?'block':'none'">
+    return `<div class="it-wrap" data-ek="p-${ci}-${pi}">
+      <div class="it-row" onclick="if(event.target.tagName==='INPUT'||event.target.tagName==='BUTTON'||event.target.tagName==='SELECT')return;toggleItem(this)">
         <div class="it-strip" style="background:${strip}"></div>
         <span class="it-arrow">▶</span>
         <input class="nm-c" data-path="${ci}|p|${pi}" data-k="nombre" value="${ESC(p.nombre)}" onclick="event.stopPropagation()">
@@ -838,7 +859,33 @@ function renderProyectos(ci){
 
 function abrirCliente(ci){vistaActual='proyectos';clienteActual=ci;renderVista();}
 function volverClientes(){vistaActual='clientes';clienteActual=null;document.getElementById('filtroEstado').innerHTML='<option value="">📋 Todos los estados</option>';document.getElementById('filtroAbono').style.display='none';renderVista();}
-function renderVista(){if(vistaActual==='proyectos'&&clienteActual!=null)renderProyectos(clienteActual);else renderClientes();}
+
+function captureExpanded(){
+  expandedKeys.clear();
+  document.querySelectorAll('.it-wrap[data-ek]').forEach(w=>{
+    if(w.querySelector('.it-row.it-open'))expandedKeys.add(w.dataset.ek);
+  });
+}
+function restoreExpanded(){
+  document.querySelectorAll('.it-wrap[data-ek]').forEach(w=>{
+    if(expandedKeys.has(w.dataset.ek)){
+      const row=w.querySelector('.it-row');
+      const body=w.querySelector('.it-body,.it-body-c');
+      if(row&&body){row.classList.add('it-open');w.classList.add('expanded');body.style.display='block';}
+    }
+  });
+}
+function toggleItem(el){
+  const wrap=el.closest('.it-wrap');
+  const body=wrap.querySelector('.it-body,.it-body-c');
+  const isOpen=el.classList.contains('it-open');
+  el.classList.toggle('it-open');
+  wrap.classList.toggle('expanded',!isOpen);
+  if(body)body.style.display=isOpen?'none':'block';
+  if(!isOpen)expandedKeys.add(wrap.dataset.ek);else expandedKeys.delete(wrap.dataset.ek);
+}
+
+function renderVista(){captureExpanded();if(vistaActual==='proyectos'&&clienteActual!=null)renderProyectos(clienteActual);else renderClientes();restoreExpanded();}
 
 // ============================================================
 // EVENTOS DE EDICIÓN
