@@ -854,7 +854,9 @@ function exportXLSX(){
     ws['!cols']=[{wch:20},{wch:10},{wch:32},{wch:22},{wch:10},{wch:7},{wch:25},{wch:18},{wch:5},{wch:38},{wch:12},{wch:8}];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,'Proyectos',ws);
+    if(rows.length<=1){alert('Sin datos para exportar. Clientes cargados: '+clientes.length);return;}
     XLSX.writeFile(wb,'ciaber_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    showSaved('✓ XLSX exportado: '+(rows.length-1)+' filas');
   }catch(e){alert('Error XLSX: '+e.message);console.error(e);}
 }
 </script>
