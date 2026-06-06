@@ -298,6 +298,7 @@ let clientes=[];
 let vistaActual='clientes';
 let clienteActual=null;
 let _saving=false;
+let _ownUpdate=false;
 
 function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 
@@ -352,9 +353,13 @@ async function initData(){
   }catch(e){
     console.error('Error cargando datos:',e);
     setSyncDot(false);
-    showSaved('⚠ Error de conexión — trabajando sin conexión');
     const local=localStorage.getItem('ciaber_v2');
-    if(local){try{const d=JSON.parse(local);clientes=fixClientes(d.clientes||[]);}catch(e2){}}
+    if(local){
+      try{const d=JSON.parse(local);clientes=fixClientes(d.clientes||[]);}catch(e2){}
+      showSaved('⚠ Sin conexión — mostrando datos locales');
+    } else {
+      showSaved('⚠ Sin conexión y sin datos locales');
+    }
     renderVista();
   }
 }
@@ -362,12 +367,13 @@ async function initData(){
 async function saveToSupabase(){
   if(_saving)return;
   _saving=true;
+  _ownUpdate=true;
   try{
     await sb.from('app_data').upsert({id:1,clientes,updated_at:new Date().toISOString()});
-    // backup local
     localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
-  }catch(e){console.error('Error guardando:',e);}
+  }catch(e){console.error('Error guardando:',e);showSaved('⚠ Error al guardar');}
   _saving=false;
+  setTimeout(()=>{_ownUpdate=false;},3000);
 }
 
 function save(){
@@ -391,7 +397,7 @@ function setSyncDot(on){
 function subscribeRealtime(){
   sb.channel('app_realtime')
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_data'},payload=>{
-      if(payload.new?.clientes){
+      if(payload.new?.clientes&&!_ownUpdate){
         clientes=fixClientes(payload.new.clientes);
         localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
         renderVista();
@@ -763,7 +769,16 @@ function addTarea(addPath){
   const arr=p[0]==='s'?clientes[ci].proyectos[pi].subpuntos[+p[3]].tareas:clientes[ci].proyectos[pi].tareas;
   const nid=(arr.length+1).toString().padStart(2,'0');
   arr.push({id:nid,tarea:'Nueva tarea',estado:'Pendiente',prioridad:'Media',adjuntos:[],subtareas:[]});
-  save();renderVista();
+  // Preserve expanded state explicitly before re-render
+  expandedKeys.add(`p-${ci}-${pi}`);
+  expandedKeys.add(`tareas-${ci}-${pi}`);
+  save();
+  renderVista();
+  // Auto-focus the new task textarea
+  setTimeout(()=>{
+    const txts=document.querySelectorAll('.tree .task textarea.txt');
+    if(txts.length){const last=txts[txts.length-1];last.focus();last.select();}
+  },30);
 }
 function delTarea(path){
   const p=path.split('|'),ci=+p[0];
