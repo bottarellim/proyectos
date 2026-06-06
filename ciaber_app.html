@@ -827,31 +827,31 @@ function importJSON(ev){
 }
 function exportXLSX(){
   try{
-    const rows=[['Cliente','Estado Cliente','Proyecto','Estado Proyecto','Abono','% Avance','Nota Proyecto','Subpunto','ID Tarea','Tarea','Estado Tarea','Prioridad']];
+    const s=v=>(v==null?'':String(v));
+    const rows=[['Cliente','Estado Cliente','Proyecto','Estado Proyecto','Abono','% Avance','Nota','Subpunto','ID','Tarea','Estado','Prioridad']];
     clientes.forEach(c=>{
       if(!c.proyectos||!c.proyectos.length){
-        rows.push([c.nombre,c.estado||'','','','','','','','','','','']);
+        rows.push([s(c.nombre),s(c.estado),'','','','','','','','','','']);
         return;
       }
       c.proyectos.forEach(p=>{
         const allT=allTareasProy(p);
-        const pct=pctOf(allT);
+        const pct=pctOf(allT)+'%';
+        const addRow=(sub,id,tarea,est,pri)=>rows.push([s(c.nombre),s(c.estado),s(p.nombre),s(p.estadoTrabajo),s(p.abono),pct,s(p.nota),s(sub),s(id),s(tarea),s(est),s(pri)]);
         const proc=(arr,sub)=>arr.forEach(t=>{
-          rows.push([c.nombre,c.estado||'',p.nombre,p.estadoTrabajo||'',p.abono||'',pct+'%',p.nota||'',sub||'',t.id||'',t.tarea,t.estado,t.prioridad||'']);
-          (t.subtareas||[]).forEach(st=>rows.push([c.nombre,c.estado||'',p.nombre,p.estadoTrabajo||'',p.abono||'',pct+'%',p.nota||'',sub||'','  -'+(st.id||''),st.tarea,st.estado,st.prioridad||'']));
+          addRow(sub,t.id,t.tarea,t.estado,t.prioridad);
+          (t.subtareas||[]).forEach(st=>addRow(sub,' -'+s(st.id),st.tarea,st.estado,st.prioridad));
         });
         if(p.subpuntos&&p.subpuntos.length){
-          p.subpuntos.forEach(s=>proc(s.tareas||[],s.nombre));
+          p.subpuntos.forEach(sp=>proc(sp.tareas||[],sp.nombre));
         } else {
           proc(p.tareas||[],'');
         }
-        if(!allT.length){
-          rows.push([c.nombre,c.estado||'',p.nombre,p.estadoTrabajo||'',p.abono||'',pct+'%',p.nota||'','','','(sin tareas)','','']);
-        }
+        if(!allT.length) addRow('','','(sin tareas)','','');
       });
     });
     const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:22},{wch:12},{wch:35},{wch:22},{wch:12},{wch:8},{wch:30},{wch:18},{wch:6},{wch:40},{wch:14},{wch:8}];
+    ws['!cols']=[{wch:20},{wch:10},{wch:32},{wch:22},{wch:10},{wch:7},{wch:25},{wch:18},{wch:5},{wch:38},{wch:12},{wch:8}];
     const wb=XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb,'Proyectos',ws);
     XLSX.writeFile(wb,'ciaber_'+new Date().toISOString().slice(0,10)+'.xlsx');
