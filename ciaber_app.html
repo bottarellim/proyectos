@@ -153,6 +153,33 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:200;cursor:pointer}
 .lightbox.show{display:flex}
 .lightbox img{max-width:92%;max-height:92%;border-radius:4px}
+
+/* === Colaboradores === */
+.colabs{display:flex;gap:3px;align-items:center;flex-wrap:wrap}
+.colab-chip{width:24px;height:24px;border-radius:50%;background:#305496;color:#fff;font-size:10px;font-weight:700;display:inline-flex;align-items:center;justify-content:center;cursor:default;position:relative;border:2px solid #fff}
+.colab-chip.online{border-color:#10b981;box-shadow:0 0 0 1px #10b981}
+.colab-chip[title]:hover::after{content:attr(title);position:absolute;bottom:calc(100% + 4px);left:50%;transform:translateX(-50%);background:#1f2937;color:#fff;padding:2px 7px;border-radius:4px;font-size:10px;white-space:nowrap;pointer-events:none;z-index:10}
+.btn-share{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:6px;padding:2px 7px;font-size:11px;cursor:pointer}
+.btn-share:hover{background:rgba(255,255,255,.25)}
+
+/* === Modal compartir === */
+#share-modal{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:300;align-items:center;justify-content:center}
+#share-modal.show{display:flex}
+.share-box{background:#fff;border-radius:12px;padding:24px;width:420px;max-width:92vw;box-shadow:0 8px 32px rgba(0,0,0,.2)}
+.share-box h3{margin:0 0 4px;font-size:16px;color:#1f2937}
+.share-box p.share-sub{margin:0 0 14px;font-size:12px;color:#6b7280}
+.share-user-row{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #f1f5f9}
+.share-user-row:last-child{border-bottom:none}
+.share-avatar{width:28px;height:28px;border-radius:50%;background:#305496;color:#fff;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.share-email{flex:1;font-size:12px;color:#374151}
+.share-role{font-size:11px;color:#6b7280;background:#f1f5f9;border-radius:4px;padding:1px 6px}
+.share-add{display:flex;gap:7px;margin-top:12px}
+.share-add input{flex:1;padding:8px 10px;border:1px solid #d1d5db;border-radius:6px;font-size:13px;font-family:inherit;outline:none}
+.share-add input:focus{border-color:#305496}
+#share-err{color:#dc2626;font-size:12px;margin:5px 0 0;min-height:16px}
+
+/* === Asignado a === */
+select.asig{border:none;background:#f0f9ff;border-radius:10px;padding:1px 5px;font-size:10px;font-weight:600;color:#0369a1;cursor:pointer;outline:none;max-width:110px}
 </style>
 </head><body>
 
@@ -203,6 +230,23 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 
 <div id="lb" class="lightbox" onclick="this.classList.remove('show')"><img id="lbi"></div>
 
+<!-- Modal compartir -->
+<div id="share-modal">
+  <div class="share-box">
+    <h3>👥 Compartir proyecto</h3>
+    <p class="share-sub" id="share-proj-name"></p>
+    <div id="share-users-list"></div>
+    <div class="share-add">
+      <input id="share-email-inp" type="email" placeholder="email del usuario a agregar" onkeydown="if(event.key==='Enter')addColaborador()">
+      <button onclick="addColaborador()">Agregar</button>
+    </div>
+    <div id="share-err"></div>
+    <div style="text-align:right;margin-top:14px;display:flex;justify-content:flex-end;gap:8px">
+      <button class="sec" onclick="closeShareModal()">Cerrar</button>
+    </div>
+  </div>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
@@ -214,6 +258,16 @@ const SUPABASE_KEY = 'sb_publishable_wNpK1pS7uhnHKp9AOEzskA_5j8U9dD6';
 // ============================================================
 
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ============================================================
+// SUPER ADMIN & PERMISOS
+// ============================================================
+const SUPER_ADMIN = 'mbottarelli@harf.com.ar';
+let currentUserEmail = '';
+let onlineUsers = new Set();
+let shareModal_ci = null;
+let shareModal_pi = null;
+let presenceChannel = null;
 
 // ============================================================
 // AUTH
@@ -240,9 +294,11 @@ sb.auth.onAuthStateChange(async(event,session)=>{
   if(event==='SIGNED_IN'&&session){
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='block';
+    currentUserEmail = session.user.email;
     document.getElementById('user-email').textContent=session.user.email;
     await initData();
     subscribeRealtime();
+    setupPresence();
   }
   if(event==='SIGNED_OUT'){
     document.getElementById('login-screen').style.display='flex';
@@ -314,6 +370,12 @@ async function initData(){
     const {data:row,error}=await sb.from('app_data').select('clientes').eq('id',1).single();
     if(row?.clientes&&row.clientes.length>0){
       clientes=fixClientes(row.clientes);
+      // Migrar: asignar propietario a proyectos sin propietario
+      let migrado=false;
+      clientes.forEach(c=>c.proyectos.forEach(p=>{
+        if(!p.propietario_email){p.propietario_email=SUPER_ADMIN;p.compartido_con=p.compartido_con||[];migrado=true;}
+      }));
+      if(migrado)await saveToSupabase();
     } else {
       // Primera vez — intentar migrar desde localStorage
       const local=localStorage.getItem('ciaber_puntos_v3');
@@ -365,6 +427,117 @@ function showSaved(msg){
 function setSyncDot(on){
   const d=document.getElementById('sync-dot');
   if(d)d.className='sync-dot'+(on?'':' off');
+}
+
+// ============================================================
+// PERMISOS
+// ============================================================
+function isSuperAdmin(){return currentUserEmail===SUPER_ADMIN;}
+
+function canSeeProject(p){
+  if(isSuperAdmin())return true;
+  if(!p.propietario_email)return true; // proyectos viejos sin propietario: todos ven
+  if(p.propietario_email===currentUserEmail)return true;
+  return (p.compartido_con||[]).includes(currentUserEmail);
+}
+
+function esPropiedad(p){
+  return isSuperAdmin()||p.propietario_email===currentUserEmail||!p.propietario_email;
+}
+
+function todosLoUsuariosProy(p){
+  const lista=[p.propietario_email||SUPER_ADMIN,...(p.compartido_con||[])];
+  if(!lista.includes(SUPER_ADMIN))lista.unshift(SUPER_ADMIN);
+  return [...new Set(lista)].filter(Boolean);
+}
+
+function iniciales(email){
+  const parts=(email||'').split('@')[0].split(/[._-]/);
+  return (parts[0][0]||(parts[1]?.[0]||'')).toUpperCase().slice(0,2)||'?';
+}
+
+function colabChips(p){
+  const users=todosLoUsuariosProy(p);
+  return `<div class="colabs">${users.map(e=>{
+    const online=onlineUsers.has(e);
+    const isAdmin=e===SUPER_ADMIN;
+    return `<span class="colab-chip${online?' online':''}" title="${e}${isAdmin?' (admin)':''}" style="${isAdmin?'background:#7c3aed':''}">${iniciales(e)}</span>`;
+  }).join('')}</div>`;
+}
+
+// ============================================================
+// MODAL COMPARTIR
+// ============================================================
+function openShareModal(ci,pi){
+  shareModal_ci=ci;shareModal_pi=pi;
+  const p=clientes[ci].proyectos[pi];
+  document.getElementById('share-proj-name').textContent=p.nombre;
+  renderShareUsers(p);
+  document.getElementById('share-email-inp').value='';
+  document.getElementById('share-err').textContent='';
+  document.getElementById('share-modal').classList.add('show');
+}
+
+function closeShareModal(){
+  document.getElementById('share-modal').classList.remove('show');
+  shareModal_ci=null;shareModal_pi=null;
+}
+
+function renderShareUsers(p){
+  const propietario=p.propietario_email||currentUserEmail;
+  const compartidos=p.compartido_con||[];
+  const todos=[{email:SUPER_ADMIN,rol:'Super Admin',fixed:true},{email:propietario,rol:'Propietario',fixed:true},...compartidos.filter(e=>e!==SUPER_ADMIN&&e!==propietario).map(e=>({email:e,rol:'Colaborador',fixed:false}))];
+  const uniqueMap=new Map();todos.forEach(u=>uniqueMap.set(u.email,u));
+  const lista=[...uniqueMap.values()];
+  document.getElementById('share-users-list').innerHTML=lista.map(u=>`
+    <div class="share-user-row">
+      <div class="share-avatar" style="${u.email===SUPER_ADMIN?'background:#7c3aed':''}">${iniciales(u.email)}</div>
+      <span class="share-email">${u.email}${onlineUsers.has(u.email)?' 🟢':''}</span>
+      <span class="share-role">${u.rol}</span>
+      ${!u.fixed?`<button class="del" onclick="quitarColaborador('${u.email}')">✕</button>`:''}
+    </div>`).join('');
+}
+
+function addColaborador(){
+  const email=document.getElementById('share-email-inp').value.trim().toLowerCase();
+  const err=document.getElementById('share-err');
+  if(!email||!email.includes('@')){err.textContent='Email inválido.';return;}
+  const p=clientes[shareModal_ci].proyectos[shareModal_pi];
+  if(!p.compartido_con)p.compartido_con=[];
+  const propietario=p.propietario_email||currentUserEmail;
+  if(email===SUPER_ADMIN||email===propietario){err.textContent='Este usuario ya tiene acceso.';return;}
+  if(p.compartido_con.includes(email)){err.textContent='Ya tiene acceso.';return;}
+  p.compartido_con.push(email);
+  err.textContent='';
+  document.getElementById('share-email-inp').value='';
+  renderShareUsers(p);
+  save();renderVista();
+}
+
+function quitarColaborador(email){
+  const p=clientes[shareModal_ci].proyectos[shareModal_pi];
+  p.compartido_con=(p.compartido_con||[]).filter(e=>e!==email);
+  renderShareUsers(p);
+  save();renderVista();
+}
+
+// ============================================================
+// PRESENCIA EN TIEMPO REAL
+// ============================================================
+function setupPresence(){
+  if(presenceChannel)presenceChannel.unsubscribe();
+  presenceChannel=sb.channel('presencia_usuarios',{config:{presence:{key:currentUserEmail}}});
+  presenceChannel
+    .on('presence',{event:'sync'},()=>{
+      const state=presenceChannel.presenceState();
+      onlineUsers=new Set(Object.keys(state));
+      renderVista();
+    })
+    .subscribe(async status=>{
+      if(status==='SUBSCRIBED'){
+        await presenceChannel.track({email:currentUserEmail,online_at:new Date().toISOString()});
+      }
+    });
 }
 
 function subscribeRealtime(){
@@ -480,6 +653,9 @@ function renderTareas(tareas,ci,pi,kind,si){
       :`Promise.resolve(clientes[${ci}].proyectos[${pi}].tareas[${ti}].adjuntos)`;
     const adjMini=(t.adjuntos||[]).length?`<div class="task-adj-mini">${(t.adjuntos||[]).map(a=>`<div class="task-adj-chip"><span>${icono(a.tipo_mime)}</span><a onclick="openFile('${a.storage_path}')">${ESC(a.nombre)}</a></div>`).join('')}</div>`:'';
     const uploadId='tup_'+refId;
+    const proy=clientes[ci].proyectos[pi];
+    const usuariosProy=todosLoUsuariosProy(proy);
+    const asigSelect=`<select class="asig" data-path="${base}" data-k="asignado_a" title="Asignado a"><option value="">— sin asignar —</option>${usuariosProy.map(e=>`<option value="${e}"${t.asignado_a===e?' selected':''}>${iniciales(e)} ${e.split('@')[0]}</option>`).join('')}</select>`;
     html+=`<div class="node task" style="${t.estado==='Terminado'?'background:#d1fae5;border-left:2px solid #10b981':t.estado==='En proceso'?'background:#fff7ed;border-left:2px solid #f97316':''}">
       <span class="tree-id">${ESC(t.id)}</span>
       <div class="tree-tx">
@@ -489,6 +665,7 @@ function renderTareas(tareas,ci,pi,kind,si){
       <div class="tree-meta">
         <select class="est" data-path="${base}" data-k="estado">${opt(ESTADOS,t.estado)}</select>
         <select class="pri" data-path="${base}" data-k="prioridad">${opt(PRIORIDADES,t.prioridad)}</select>
+        ${asigSelect}
         <button class="btn-sub" onclick="document.getElementById('${uploadId}').click()" title="Adjuntar">📎</button>
         <input type="file" id="${uploadId}" class="adj-upload-inp" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
           onchange="${adjPath}.then(arr=>handleUpload(event,'tarea','${refId}',arr))">
@@ -618,6 +795,7 @@ function renderProyectos(ci){
   const fv=filtroSel.value;
   const fAb=document.getElementById('filtroAbono').value;
   const lista=c.proyectos.filter(p=>{
+    if(!canSeeProject(p))return false;
     if(fv&&(p.estadoTrabajo||'Sin Iniciar')!==fv)return false;
     if(fAb&&(p.abono||'Sin Abono')!==fAb)return false;
     if(q&&!p.nombre.toLowerCase().includes(q))return false;
@@ -645,6 +823,8 @@ function renderProyectos(ci){
         <div class="it-meta">
           <select class="est-trabajo ${ET_CLASS[p.estadoTrabajo||'Sin Iniciar']||'etj-SinIniciar'}" data-path="${ci}|p|${pi}" data-k="estadoTrabajo" onclick="event.stopPropagation()">${optTrabajo(p.estadoTrabajo||'Sin Iniciar')}</select>
           <select class="est-abono ${(p.abono||'Sin Abono')==='Abono'?'abono-Con':'abono-Sin'}" data-path="${ci}|p|${pi}" data-k="abono" onclick="event.stopPropagation()">${opt(OPCIONES_ABONO,p.abono||'Sin Abono')}</select>
+          ${colabChips(p)}
+          ${esPropiedad(p)?`<button class="btn-share" onclick="event.stopPropagation();openShareModal(${ci},${pi})" title="Compartir">👥</button>`:''}
           <span class="it-pct">${pct}% · ${total}t</span>
           ${p.fechaTerminado?`<span class="it-fecha">✓ ${p.fechaTerminado}</span>`:''}
           <button class="del it-del" onclick="event.stopPropagation();delProyecto(${ci},${pi})">✕</button>
@@ -681,8 +861,8 @@ function applyEdit(path,k,val){
       else if(k==='abono')pr.abono=val;
       return;}
     if(p[1]==='sp'){const pi=+p[2],si=+p[3],s=c.proyectos[pi]?.subpuntos[si];if(!s)return;if(k==='nombreSub')s.nombre=val;else if(k==='descSub')s.desc=val;return;}
-    if(p[1]==='t'){const pi=+p[2],ti=+p[3],t=c.proyectos[pi]?.tareas[ti];if(!t)return;if(p.length===4)t[k]=val;else if(p.length===5){const st=t.subtareas[+p[4]];if(st)st[k]=val;}return;}
-    if(p[1]==='s'){const pi=+p[2],si=+p[3],ti=+p[4],t=c.proyectos[pi]?.subpuntos[si]?.tareas[ti];if(!t)return;if(p.length===5)t[k]=val;else if(p.length===6){const st=t.subtareas[+p[5]];if(st)st[k]=val;}return;}
+    if(p[1]==='t'){const pi=+p[2],ti=+p[3],t=c.proyectos[pi]?.tareas[ti];if(!t)return;if(p.length===4){t[k]=val;}else if(p.length===5){const st=t.subtareas[+p[4]];if(st)st[k]=val;}return;}
+    if(p[1]==='s'){const pi=+p[2],si=+p[3],ti=+p[4],t=c.proyectos[pi]?.subpuntos[si]?.tareas[ti];if(!t)return;if(p.length===5){t[k]=val;}else if(p.length===6){const st=t.subtareas[+p[5]];if(st)st[k]=val;}return;}
   }catch(e){console.warn('applyEdit:',e.message);}
 }
 
@@ -691,7 +871,7 @@ function applyEdit(path,k,val){
 // ============================================================
 function addItem(){
   if(vistaActual==='clientes'){clientes.push({id:newId(),nombre:'Nuevo Cliente',estado:'Activo',nota:'',color:null,proyectos:[]});}
-  else{if(clienteActual==null)return;clientes[clienteActual].proyectos.push({id:newId(),nombre:'Nuevo Proyecto',estadoTrabajo:'Sin Iniciar',abono:'Sin Abono',color:null,nota:'',adjuntos:[],fechaTerminado:null,tareas:[],subpuntos:[]});}
+  else{if(clienteActual==null)return;clientes[clienteActual].proyectos.push({id:newId(),nombre:'Nuevo Proyecto',estadoTrabajo:'Sin Iniciar',abono:'Sin Abono',color:null,nota:'',adjuntos:[],fechaTerminado:null,tareas:[],subpuntos:[],propietario_email:currentUserEmail,compartido_con:[]});}
   save();renderVista();
 }
 function delCliente(ci){if(!confirm(`¿Eliminar cliente "${clientes[ci].nombre}"?`))return;clientes.splice(ci,1);save();renderVista();}
