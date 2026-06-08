@@ -649,11 +649,9 @@ function renderProyectoBody(p,ci,pi){
       </div>
       <div class="adj-list">${adjItems}</div>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin:6px 0 2px">
-      <div class="tareas-toggle" style="margin:0" data-tkey="tareas-${ci}-${pi}" onclick="this.classList.toggle('t-open');this.parentElement.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('tareas-${ci}-${pi}');else expandedKeys.delete('tareas-${ci}-${pi}')">
-        <span class="t-arrow">▶</span> Tareas <span style="color:#9ca3af;font-weight:400">(${total})</span>
-      </div>
-      <button class="add" style="font-size:11px;padding:2px 10px" onclick="quickAddTarea(${ci},${pi})">+ Nueva Tarea</button>
+    <div class="tareas-toggle" data-tkey="tareas-${ci}-${pi}" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('tareas-${ci}-${pi}');else expandedKeys.delete('tareas-${ci}-${pi}')">
+      <span class="t-arrow">▶</span> Tareas <span style="color:#9ca3af;font-weight:400">(${total})</span>
+      <button class="add" style="font-size:11px;padding:1px 8px;margin-left:8px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})">+ Nueva Tarea</button>
     </div>
     <div style="display:none">${tareasHtml}</div>`;
 }
