@@ -166,6 +166,11 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 .empty{text-align:center;padding:48px 20px;color:#9ca3af}
 .empty-icon{font-size:40px;margin-bottom:8px}
 
+
+/* === Botón guardar manual === */
+button.btn-save{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;padding:2px 7px;font-size:11px;border-radius:5px;box-shadow:none;font-weight:700;transition:all .15s}
+button.btn-save:hover{background:#059669;color:#fff;border-color:#059669}
+button.btn-save.guardado{background:#059669;color:#fff;border-color:#059669}
 /* === Lightbox === */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:200;cursor:pointer}
 .lightbox.show{display:flex}
@@ -543,6 +548,7 @@ function renderTareas(tareas,ci,pi,kind,si){
         <button class="btn-sub" onclick="document.getElementById('${uploadId}').click()" title="Adjuntar">📎</button>
         <input type="file" id="${uploadId}" class="adj-upload-inp" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt"
           onchange="${adjPath}.then(arr=>handleUpload(event,'tarea','${refId}',arr))">
+        <button class="btn-save" onclick="guardarAhora(this)">✓</button>
         <button class="btn-sub" onclick="addSub('${base}')">+sub</button>
         <button class="del" onclick="delTarea('${base}')">✕</button>
       </div></div>`;
@@ -588,6 +594,7 @@ function renderProyectoBody(p,ci,pi){
         <div class="subp-head">
           <span class="toggle-sp" onclick="this.classList.toggle('col');this.parentElement.nextElementSibling.classList.toggle('collapsed-ch')">▼</span>
           <input data-path="${ci}|sp|${pi}|${si}" data-k="nombreSub" value="${ESC(s.nombre)}">
+          <button class="btn-save" onclick="guardarAhora(this)">✓</button>
           <button class="del" onclick="delSubpunto(${ci},${pi},${si})">✕</button>
         </div>
         <div>
@@ -694,6 +701,7 @@ function renderProyectos(ci){
           <select class="est-abono ${(p.abono||'Sin Abono')==='Abono'?'abono-Con':'abono-Sin'}" data-path="${ci}|p|${pi}" data-k="abono" onclick="event.stopPropagation()">${opt(OPCIONES_ABONO,p.abono||'Sin Abono')}</select>
           <span class="it-pct">${pct}% · ${total}t</span>
           ${p.fechaTerminado?`<span class="it-fecha">✓ ${p.fechaTerminado}</span>`:''}
+          <button class="btn-save it-del" style="opacity:0" onclick="event.stopPropagation();guardarAhora(this)" title="Guardar proyecto">✓</button>
           <button class="add it-del" style="opacity:0;font-size:10px;padding:2px 6px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})" title="Nueva tarea">+Tarea</button>
           <button class="add it-del" style="opacity:0;font-size:10px;padding:2px 6px;border-color:#bae6fd;color:#0369a1" onclick="event.stopPropagation();quickAddSub(${ci},${pi})" title="Nuevo subpunto">+Sub</button>
           <button class="del it-del" onclick="event.stopPropagation();delProyecto(${ci},${pi})">✕</button>
@@ -752,7 +760,7 @@ function renderVista(){
 // EVENTOS DE EDICIÓN
 // ============================================================
 function _onRootChange(ev){const t=ev.target;if(!t.dataset.path)return;applyEdit(t.dataset.path,t.dataset.k,t.value);save();renderVista();}
-function _onRootInput(ev){const t=ev.target;if(!t.dataset.path||t.tagName==='SELECT')return;clearTimeout(window._it);window._it=setTimeout(()=>{applyEdit(t.dataset.path,t.dataset.k,t.value);save();},600);}
+function _onRootInput(ev){const t=ev.target;if(!t.dataset.path||t.tagName==='SELECT')return;applyEdit(t.dataset.path,t.dataset.k,t.value);clearTimeout(window._it);window._it=setTimeout(save,2000);}
 let _eventsBound=false;
 function bindEvents(){
   if(_eventsBound)return;
@@ -805,6 +813,12 @@ function updateUndoBtn(){
   if(b)b.style.display=_history.length?'':'none';
 }
 
+
+function guardarAhora(btn){
+  clearTimeout(window._it);
+  if(btn){btn.classList.add('guardado');btn.textContent='✓ Guardado';setTimeout(()=>{if(btn){btn.classList.remove('guardado');btn.textContent='✓'}},1500);}
+  save();
+}
 function quickAddTarea(ci,pi){
   pushHistory();
   const p=clientes[ci].proyectos[pi];
