@@ -234,7 +234,16 @@ button.btn-save.guardado{background:#059669;color:#fff;border-color:#059669}
 
 <div id="lb" class="lightbox" onclick="this.classList.remove('show')"><img id="lbi"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" onerror="loadSupabaseFallback()"></script>
+<script>
+function loadSupabaseFallback(){
+  var s=document.createElement('script');
+  s.src='https://unpkg.com/@supabase/supabase-js@2';
+  s.onload=function(){initApp();};
+  s.onerror=function(){document.getElementById('l-err').textContent='Error de conexión. Verificá tu red y recargá.';};
+  document.head.appendChild(s);
+}
+</script>
 <script>
 // ============================================================
 // CONFIGURACIÓN SUPABASE
@@ -243,7 +252,27 @@ const SUPABASE_URL = 'https://ftpcqmzgpvzhwrckqlii.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_wNpK1pS7uhnHKp9AOEzskA_5j8U9dD6';
 // ============================================================
 
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let sb;
+function initApp(){
+  if(!window.supabase){document.getElementById('l-err').textContent='Error: librería no disponible. Recargá.';return;}
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+  sb.auth.onAuthStateChange(async(event,session)=>{
+    if(event==='SIGNED_IN'&&session){
+      document.getElementById('login-screen').style.display='none';
+      document.getElementById('app').style.display='block';
+      document.getElementById('user-email').textContent=session.user.email;
+      subscribeRealtime();
+      await initData();
+    }
+    if(event==='SIGNED_OUT'){
+      document.getElementById('login-screen').style.display='flex';
+      document.getElementById('app').style.display='none';
+      document.getElementById('l-btn').textContent='Ingresar';
+      document.getElementById('l-btn').disabled=false;
+    }
+  });
+}
+// initApp se llama al final del script
 
 // ============================================================
 // AUTH
@@ -266,21 +295,18 @@ async function doLogout(){
   await sb.auth.signOut();
 }
 
-sb.auth.onAuthStateChange(async(event,session)=>{
-  if(event==='SIGNED_IN'&&session){
-    document.getElementById('login-screen').style.display='none';
-    document.getElementById('app').style.display='block';
-    document.getElementById('user-email').textContent=session.user.email;
-    subscribeRealtime();
-    await initData();
-  }
-  if(event==='SIGNED_OUT'){
-    document.getElementById('login-screen').style.display='flex';
-    document.getElementById('app').style.display='none';
-    document.getElementById('l-btn').textContent='Ingresar';
-    document.getElementById('l-btn').disabled=false;
-  }
-});
+// ============================================================
+// INICIO DE LA APP
+// ============================================================
+if(window.supabase){
+  initApp();
+} else {
+  var _fb=document.createElement('script');
+  _fb.src='https://unpkg.com/@supabase/supabase-js@2';
+  _fb.onload=function(){initApp();};
+  _fb.onerror=function(){document.getElementById('l-err').textContent='Error de conexión. Verificá tu red y recargá la página.';};
+  document.head.appendChild(_fb);
+}
 
 // ============================================================
 // CONSTANTES
@@ -931,4 +957,4 @@ function delSub(path){
   save();renderVista();
 }
 
-// ================================================
+// ================================================                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
