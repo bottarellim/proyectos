@@ -642,7 +642,6 @@ function renderTareas(tareas,ci,pi,kind,si){
   });
   html+=`</div>`;
   const addPath=kind==='s'?`s|${ci}|${pi}|${si}`:`t|${ci}|${pi}`;
-  html+=`<button class="add" onclick="addTarea('${addPath}')">+ Nueva tarea</button>`;
   return html;
 }
 
@@ -694,7 +693,6 @@ function renderProyectoBody(p,ci,pi){
     <div class="tareas-toggle" data-tkey="tareas-${ci}-${pi}" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('tareas-${ci}-${pi}');else expandedKeys.delete('tareas-${ci}-${pi}')">
       <span class="t-arrow">▶</span> Tareas <span style="color:#9ca3af;font-weight:400">(${total})</span>
       <button class="add" style="font-size:11px;padding:1px 8px;margin-left:8px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})">+ Nueva Tarea</button>
-      <button class="add" style="font-size:11px;padding:1px 8px;margin-left:4px;border-color:#bae6fd;color:#0369a1" onclick="event.stopPropagation();quickAddSub(${ci},${pi})">+ Nueva Fase</button>
     </div>
     <div style="display:none">${tareasHtml}</div>
     <div class="nota-box"><textarea data-path="${ci}|p|${pi}" data-k="nota" placeholder="Notas del proyecto...">${ESC(p.nota||'')}</textarea></div>
@@ -790,7 +788,6 @@ function renderProyectos(ci){
           ${p.fechaTerminado?`<span class="it-fecha">✓ ${p.fechaTerminado}</span>`:''}
           <button class="btn-save it-del" style="" onclick="event.stopPropagation();guardarAhora(this)" title="Guardar proyecto">✓</button>
           <button class="add it-del" style="font-size:10px;padding:2px 6px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})" title="Nueva tarea">+Tarea</button>
-          <button class="add it-del" style="font-size:10px;padding:2px 6px;border-color:#bae6fd;color:#0369a1" onclick="event.stopPropagation();quickAddSub(${ci},${pi})" title="Nueva Fase">+Sub</button>
           <input type="checkbox" class="sel-cb it-del" data-sel="p|${ci}|${pi}" onclick="event.stopPropagation();toggleSel(this)" title="Seleccionar para eliminar">
         </div>
       </div>
