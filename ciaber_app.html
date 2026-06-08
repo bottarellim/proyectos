@@ -284,21 +284,22 @@ async function doLogin(){
   }
 }
 async function doLogout(){
-  await sb.auth.signOut();
-  localStorage.removeItem('ciaber_v2');
-  clientes=[];
-  document.getElementById('login-screen').style.display='flex';
-  document.getElementById('app').style.display='none';
-  document.getElementById('l-btn').textContent='Ingresar';
-  document.getElementById('l-btn').disabled=false;
-  document.getElementById('l-email').value='';
-  document.getElementById('l-pass').value='';
   document.getElementById('l-err').textContent='';
+  forceRelogin();
 }
 
 // ============================================================
 // INICIO DE LA APP
 // ============================================================
+
+// Refresh de sesión cada 30 minutos para evitar expiración silenciosa
+setInterval(async()=>{
+  const {data:{session},error}=await sb.auth.getSession();
+  if(!session||error){
+    const {error:re}=await sb.auth.refreshSession();
+    if(re){showSaved('⚠ Sesión expirada — reingresá');forceRelogin();}
+  }
+},30*60*1000);
 sb.auth.onAuthStateChange(async(event,session)=>{
   if(event==='SIGNED_IN'&&session){
     document.getElementById('login-screen').style.display='none';
@@ -422,26 +423,61 @@ async function initData(retryN=0){
 }
 
 async function saveToSupabase(){
-  if(_saving){_pendingSave=true;return;}
+  if(_saving){_pendingSave=true;return false;}
   _saving=true;
   const ts=new Date().toISOString();
   _ownTimestamps.add(ts);
+  let ok=false;
   try{
-    await sb.from('app_data').upsert({id:1,clientes,updated_at:ts});
+    // Verificar sesión antes de guardar
+    const {data:{session}}=await sb.auth.getSession();
+    if(!session){
+      _saving=false;
+      _ownTimestamps.delete(ts);
+      showSaved('⚠ Sesión expirada — reingresá');
+      forceRelogin();
+      return false;
+    }
+    const {error}=await sb.from('app_data').upsert({id:1,clientes,updated_at:ts});
+    if(error)throw error;
     localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
     _confirmedJson=JSON.stringify(clientes);
+    ok=true;
   }catch(e){
     console.error('Error guardando:',e);
-    showSaved('⚠ Error al guardar');
     _ownTimestamps.delete(ts);
+    // Si es error de auth, forzar re-login
+    if(e.message&&(e.message.includes('JWT')||e.message.includes('auth')||e.message.includes('401')||e.message.includes('403'))){
+      showSaved('⚠ Sesión expirada — reingresá');
+      forceRelogin();
+    } else {
+      showSaved('⚠ Error al guardar — sin conexión');
+      setSyncDot(false,'Error al guardar');
+    }
   }
   _saving=false;
   if(_pendingSave){_pendingSave=false;await saveToSupabase();}
+  return ok;
 }
 
 function save(){
   showSaved('⏳ Guardando...');
-  saveToSupabase().then(()=>showSaved('✓ Guardado '+new Date().toLocaleTimeString()));
+  saveToSupabase().then(ok=>{
+    if(ok)showSaved('✓ Guardado '+new Date().toLocaleTimeString());
+  });
+}
+
+function forceRelogin(){
+  sb.auth.signOut().catch(()=>{});
+  localStorage.removeItem('ciaber_v2');
+  clientes=[];
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('l-btn').textContent='Ingresar';
+  document.getElementById('l-btn').disabled=false;
+  document.getElementById('l-email').value='';
+  document.getElementById('l-pass').value='';
+  document.getElementById('l-err').textContent='Tu sesión expiró. Volvé a ingresar.';
 }
 
 function showSaved(msg){
