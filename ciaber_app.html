@@ -292,14 +292,7 @@ async function doLogout(){
 // INICIO DE LA APP
 // ============================================================
 
-// Refresh de sesión cada 30 minutos para evitar expiración silenciosa
-setInterval(async()=>{
-  const {data:{session},error}=await sb.auth.getSession();
-  if(!session||error){
-    const {error:re}=await sb.auth.refreshSession();
-    if(re){showSaved('⚠ Sesión expirada — reingresá');forceRelogin();}
-  }
-},30*60*1000);
+// Supabase maneja el refresh de token automáticamente
 sb.auth.onAuthStateChange(async(event,session)=>{
   if(event==='SIGNED_IN'&&session){
     document.getElementById('login-screen').style.display='none';
@@ -429,15 +422,6 @@ async function saveToSupabase(){
   _ownTimestamps.add(ts);
   let ok=false;
   try{
-    // Verificar sesión antes de guardar
-    const {data:{session}}=await sb.auth.getSession();
-    if(!session){
-      _saving=false;
-      _ownTimestamps.delete(ts);
-      showSaved('⚠ Sesión expirada — reingresá');
-      forceRelogin();
-      return false;
-    }
     const {error}=await sb.from('app_data').upsert({id:1,clientes,updated_at:ts});
     if(error)throw error;
     localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
