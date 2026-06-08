@@ -125,6 +125,10 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 .adj-upload-inp{display:none}
 .adj-uploading{color:#6b7280;font-size:11px;font-style:italic}
 
+/* === Selección múltiple === */
+.sel-cb{width:15px;height:15px;cursor:pointer;accent-color:#305496;flex-shrink:0}
+#btn-del-sel{display:none;background:#dc2626;border-color:#b91c1c;color:#fff;font-weight:700}
+#btn-del-sel:hover{background:#b91c1c}
 /* === Fecha estimada / Ticket === */
 input.fecha-est{border:1px solid #bfdbfe;border-radius:5px;padding:2px 6px;font-size:11px;color:#1e3a6e;font-family:inherit;background:#f0f9ff;cursor:pointer;max-width:120px}
 input.fecha-est:focus{outline:none;border-color:#305496}
@@ -228,6 +232,7 @@ button.btn-save.guardado{background:#059669;color:#fff;border-color:#059669}
     <div class="actbar">
       <button class="add-main" id="btn-add" onclick="addItem()">+ Nuevo Cliente</button>
       <button class="sec" onclick="exportJSON()">Backup</button>
+      <button id="btn-del-sel" onclick="deleteSelected()">🗑 Eliminar seleccionados (<span id="sel-count">0</span>)</button>
       <button class="sec" id="btn-undo" onclick="undo()" style="display:none;background:#1d4ed8;border-color:#3b82f6;color:#fff;font-weight:700">« Deshacer</button>
       <button class="sec" onclick="document.getElementById('imp').click()">Importar</button>
       <span class="saved" id="saved"></span>
@@ -335,6 +340,7 @@ let clientes=[];
 let vistaActual='clientes';
 let clienteActual=null;
 let _saving=false;
+const _selected=new Set();
 let _pendingSave=false;
 let _confirmedJson=null;
 const _ownTimestamps=new Set();
@@ -614,7 +620,7 @@ function renderTareas(tareas,ci,pi,kind,si){
           onchange="${adjPath}.then(arr=>handleUpload(event,'tarea','${refId}',arr))">
         <button class="btn-save" onclick="guardarAhora(this)">✓</button>
         <button class="btn-sub" onclick="addSub('${base}')">+sub</button>
-        <button class="del" onclick="delTarea('${base}')">✕</button>
+        <input type="checkbox" class="sel-cb" data-sel="t|${base}" onclick="toggleSel(this)" title="Seleccionar para eliminar">
       </div></div>`;
     if((t.subtareas||[]).length){
       html+=`<div style="margin-left:14px">`;
@@ -628,7 +634,7 @@ function renderTareas(tareas,ci,pi,kind,si){
             <input type="date" class="fecha-est" data-path="${spath}" data-k="fechaEstimada" value="${ESC(st.fechaEstimada||''  )}" title="Fecha estimada">
             <select class="est" data-path="${spath}" data-k="estado">${opt(ESTADOS,st.estado)}</select>
             <select class="pri" data-path="${spath}" data-k="prioridad">${opt(PRIORIDADES,st.prioridad)}</select>
-            <button class="del" onclick="delSub('${spath}')">✕</button>
+            <input type="checkbox" class="sel-cb" data-sel="st|${spath}" onclick="toggleSel(this)" title="Seleccionar para eliminar">
           </div></div>`;
       });
       html+=`</div>`;
@@ -785,7 +791,7 @@ function renderProyectos(ci){
           <button class="btn-save it-del" style="" onclick="event.stopPropagation();guardarAhora(this)" title="Guardar proyecto">✓</button>
           <button class="add it-del" style="font-size:10px;padding:2px 6px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})" title="Nueva tarea">+Tarea</button>
           <button class="add it-del" style="font-size:10px;padding:2px 6px;border-color:#bae6fd;color:#0369a1" onclick="event.stopPropagation();quickAddSub(${ci},${pi})" title="Nueva Fase">+Sub</button>
-          <button class="del it-del" onclick="event.stopPropagation();delProyecto(${ci},${pi})">✕</button>
+          <input type="checkbox" class="sel-cb it-del" data-sel="p|${ci}|${pi}" onclick="event.stopPropagation();toggleSel(this)" title="Seleccionar para eliminar">
         </div>
       </div>
       <div class="it-body" style="display:none">${renderProyectoBody(p,ci,pi)}</div>
@@ -896,6 +902,51 @@ function updateUndoBtn(){
 }
 
 
+
+function toggleSel(cb){
+  const k=cb.dataset.sel;
+  if(cb.checked)_selected.add(k);else _selected.delete(k);
+  const n=_selected.size;
+  const btn=document.getElementById('btn-del-sel');
+  const cnt=document.getElementById('sel-count');
+  btn.style.display=n?'':'none';
+  if(cnt)cnt.textContent=n;
+}
+function deleteSelected(){
+  if(!_selected.size)return;
+  if(!confirm(`¿Eliminar ${_selected.size} elemento(s) seleccionado(s)?`))return;
+  pushHistory();
+  // Agrupar por tipo y ordenar de mayor a menor índice para no romper referencias
+  const projs=[],tareas=[],subs=[];
+  _selected.forEach(k=>{
+    const p=k.split('|');
+    if(p[0]==='p')projs.push({ci:+p[1],pi:+p[2]});
+    else if(p[0]==='t'){
+      const pp=p[1].split('|');
+      if(p[1].includes('|t|'))tareas.push({ci:+pp[0],pi:+pp[2],ti:+pp[3],kind:'t'});
+      else if(p[1].includes('|s|'))tareas.push({ci:+pp[0],pi:+pp[2],si:+pp[3],ti:+pp[4],kind:'s'});
+    } else if(p[0]==='st'){
+      const pp=p[1].split('|');
+      if(pp[1]==='t')subs.push({ci:+pp[0],pi:+pp[2],ti:+pp[3],sti:+pp[4],kind:'t'});
+      else if(pp[1]==='s')subs.push({ci:+pp[0],pi:+pp[2],si:+pp[3],ti:+pp[4],sti:+pp[5],kind:'s'});
+    }
+  });
+  // Subtareas primero (mayor índice primero)
+  subs.sort((a,b)=>b.sti-a.sti).forEach(x=>{
+    const t=x.kind==='t'?clientes[x.ci].proyectos[x.pi].tareas[x.ti]:clientes[x.ci].proyectos[x.pi].subpuntos[x.si].tareas[x.ti];
+    if(t)t.subtareas.splice(x.sti,1);
+  });
+  // Tareas (mayor índice primero)
+  tareas.sort((a,b)=>b.ti-a.ti).forEach(x=>{
+    const arr=x.kind==='t'?clientes[x.ci].proyectos[x.pi].tareas:clientes[x.ci].proyectos[x.pi].subpuntos[x.si].tareas;
+    if(arr)arr.splice(x.ti,1);
+  });
+  // Proyectos (mayor índice primero)
+  projs.sort((a,b)=>b.pi-a.pi).forEach(x=>{clientes[x.ci].proyectos.splice(x.pi,1);});
+  _selected.clear();
+  document.getElementById('btn-del-sel').style.display='none';
+  save();renderVista();
+}
 function guardarAhora(btn){
   clearTimeout(window._it);
   if(btn){btn.classList.add('guardado');btn.textContent='✓ Guardado';setTimeout(()=>{if(btn){btn.classList.remove('guardado');btn.textContent='✓'}},1500);}
@@ -983,23 +1034,4 @@ function delSub(path){
 // ============================================================
 // ============================================================
 function exportJSON(){
-  const blob=new Blob([JSON.stringify({clientes},null,2)],{type:'application/json'});
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-  a.download='ciaber_backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();
-}
-function importJSON(ev){
-  const f=ev.target.files[0];if(!f)return;
-  const r=new FileReader();
-  r.onload=e=>{
-    try{
-      const d=JSON.parse(e.target.result);
-      if(d.clientes)clientes=fixClientes(d.clientes);
-      else if(Array.isArray(d))clientes=migrarDesdeFormatoViejo(d);
-      save();renderVista();alert('Importado correctamente.');
-    }catch(err){alert('Archivo inválido: '+err.message);}
-  };r.readAsText(f);
-}
-
-</script>
-</body>
-</html>
+  const blob=new Blob([JSON.stringify({clientes},null,2)],{type:'appli
