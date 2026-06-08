@@ -694,6 +694,8 @@ function renderProyectos(ci){
           <select class="est-abono ${(p.abono||'Sin Abono')==='Abono'?'abono-Con':'abono-Sin'}" data-path="${ci}|p|${pi}" data-k="abono" onclick="event.stopPropagation()">${opt(OPCIONES_ABONO,p.abono||'Sin Abono')}</select>
           <span class="it-pct">${pct}% · ${total}t</span>
           ${p.fechaTerminado?`<span class="it-fecha">✓ ${p.fechaTerminado}</span>`:''}
+          <button class="add it-del" style="opacity:0;font-size:10px;padding:2px 6px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})" title="Nueva tarea">+Tarea</button>
+          <button class="add it-del" style="opacity:0;font-size:10px;padding:2px 6px;border-color:#bae6fd;color:#0369a1" onclick="event.stopPropagation();quickAddSub(${ci},${pi})" title="Nuevo subpunto">+Sub</button>
           <button class="del it-del" onclick="event.stopPropagation();delProyecto(${ci},${pi})">✕</button>
         </div>
       </div>
@@ -802,6 +804,23 @@ function updateUndoBtn(){
   const b=document.getElementById('btn-undo');
   if(b)b.style.display=_history.length?'':'none';
 }
+
+function quickAddTarea(ci,pi){
+  pushHistory();
+  const p=clientes[ci].proyectos[pi];
+  // Si hay subpuntos, agregar al último; si no, a tareas directas
+  const arr=(p.subpuntos&&p.subpuntos.length)?p.subpuntos[p.subpuntos.length-1].tareas:p.tareas;
+  const nid=(arr.length+1).toString().padStart(2,'0');
+  arr.push({id:nid,tarea:'Nueva tarea',estado:'Pendiente',prioridad:'Media',adjuntos:[],subtareas:[]});
+  expandedKeys.add('p-'+ci+'-'+pi);
+  expandedKeys.add('tareas-'+ci+'-'+pi);
+  save();renderVista();
+  setTimeout(()=>{const txts=document.querySelectorAll('.tree .task textarea.txt');if(txts.length){const l=txts[txts.length-1];l.focus();l.select();}},60);
+}
+function quickAddSub(ci,pi){
+  expandedKeys.add('p-'+ci+'-'+pi);
+  addSubpunto(ci,pi);
+}
 function addItem(){
   pushHistory();
   if(vistaActual==='clientes'){
@@ -817,12 +836,14 @@ function addItem(){
 function delCliente(ci){if(!confirm(`¿Eliminar cliente "${clientes[ci].nombre}"?`))return;pushHistory();clientes.splice(ci,1);save();renderVista();}
 function delProyecto(ci,pi){if(!confirm(`¿Eliminar proyecto "${clientes[ci].proyectos[pi].nombre}"?`))return;pushHistory();clientes[ci].proyectos.splice(pi,1);save();renderVista();}
 function addSubpunto(ci,pi){
+  pushHistory();
   const p=clientes[ci].proyectos[pi];if(!p.subpuntos)p.subpuntos=[];
   if(!p.subpuntos.length&&p.tareas&&p.tareas.length&&confirm('¿Mover tareas a subpunto "General"?')){p.subpuntos.push({id:newId(),nombre:'General',desc:'',tareas:p.tareas});p.tareas=[];}
   p.subpuntos.push({id:newId(),nombre:'Nuevo subpunto',desc:'',tareas:[]});save();renderVista();
 }
 function delSubpunto(ci,pi,si){const p=clientes[ci].proyectos[pi];if(!confirm(`¿Eliminar subpunto "${p.subpuntos[si].nombre}"?`))return;pushHistory();p.subpuntos.splice(si,1);if(!p.subpuntos.length)p.subpuntos=[];save();renderVista();}
 function addTarea(addPath){
+  pushHistory();
   const p=addPath.split('|'),ci=+p[1],pi=+p[2];
   const arr=p[0]==='s'?clientes[ci].proyectos[pi].subpuntos[+p[3]].tareas:clientes[ci].proyectos[pi].tareas;
   const nid=(arr.length+1).toString().padStart(2,'0');
@@ -846,6 +867,7 @@ function delTarea(path){
   save();renderVista();
 }
 function addSub(path){
+  pushHistory();
   const p=path.split('|'),ci=+p[0];
   let t;
   if(p[1]==='t')t=clientes[ci].proyectos[+p[2]].tareas[+p[3]];
