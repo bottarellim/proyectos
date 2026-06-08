@@ -285,7 +285,10 @@ async function saveToSupabase() {
   _ownTimestamps.add(ts);
   let ok = false;
   try {
-    const { error } = await sb.from('app_data').upsert({ id: 1, clientes, updated_at: ts });
+    // Timeout de 12s para que no quede colgado "Guardando..." si la red está lenta
+    const upsertPromise = sb.from('app_data').upsert({ id: 1, clientes, updated_at: ts });
+    const timeoutPromise = new Promise((_, rej) => setTimeout(() => rej(new Error('Timeout guardando')), 12000));
+    const { error } = await Promise.race([upsertPromise, timeoutPromise]);
     if (error) throw error;
     localStorage.setItem('ciaber_v2', JSON.stringify({ clientes }));
     _confirmedJson = JSON.stringify(clientes);
@@ -604,6 +607,20 @@ function renderClientes() {
   document.getElementById('breadcrumb').innerHTML = `<span class="cur">Clientes</span>`;
 
   if (!lista.length) {
+    // Si clientes está vacío pero hay datos en localStorage, recuperar automáticamente
+    if (!clientes.length) {
+      try {
+        const local = localStorage.getItem('ciaber_v2');
+        if (local) {
+          const d = JSON.parse(local);
+          if (d.clientes?.length) {
+            clientes = fixClientes(d.clientes);
+            renderVista();
+            return;
+          }
+        }
+      } catch(e) {}
+    }
     document.getElementById('root').innerHTML = `<div class="empty"><div class="empty-icon">🏢</div><p>No hay clientes. Hacé clic en <b>+ Nuevo Cliente</b>.</p></div>`;
     return;
   }
@@ -628,7 +645,7 @@ function renderClientes() {
 
 function renderProyectos(ci) {
   const c = clientes[ci];
-  if (!c) return;
+  if (!c) { vistaActual = 'clientes'; clienteActual = null; renderClientes(); return; }
   document.getElementById('btn-add').textContent = '+ Nuevo Proyecto';
   document.getElementById('filtroAbono').style.display = '';
   const filtroSel = document.getElementById('filtroEstado');
