@@ -279,6 +279,8 @@ async function saveToSupabase() {
   }
   if (_saving) { _pendingSave = true; return false; }
   _saving = true;
+  // Timeout de seguridad: si en 20s no termina, liberar el flag
+  const safetyTimer = setTimeout(() => { _saving = false; _pendingSave = false; }, 20000);
   const ts = new Date().toISOString();
   _ownTimestamps.add(ts);
   let ok = false;
@@ -294,6 +296,7 @@ async function saveToSupabase() {
     showSaved('⚠ Error al guardar — sin conexión');
     setSyncDot(false, 'Error al guardar');
   }
+  clearTimeout(safetyTimer);
   _saving = false;
   if (_pendingSave) { _pendingSave = false; saveToSupabase(); }
   return ok;
@@ -303,6 +306,11 @@ function save() {
   showSaved('⏳ Guardando...');
   saveToSupabase().then(ok => {
     if (ok) showSaved('✓ Guardado ' + new Date().toLocaleTimeString());
+    else {
+      // Limpiar el spinner si saveToSupabase no puso otro mensaje
+      const s = document.getElementById('saved');
+      if (s && s.textContent === '⏳ Guardando...') showSaved('');
+    }
   });
 }
 
