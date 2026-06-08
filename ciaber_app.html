@@ -278,7 +278,18 @@ async function doLogin(){
     btn.textContent='Ingresar';btn.disabled=false;
   }
 }
-async function doLogout(){await sb.auth.signOut();}
+async function doLogout(){
+  await sb.auth.signOut();
+  localStorage.removeItem('ciaber_v2');
+  clientes=[];
+  document.getElementById('login-screen').style.display='flex';
+  document.getElementById('app').style.display='none';
+  document.getElementById('l-btn').textContent='Ingresar';
+  document.getElementById('l-btn').disabled=false;
+  document.getElementById('l-email').value='';
+  document.getElementById('l-pass').value='';
+  document.getElementById('l-err').textContent='';
+}
 
 // ============================================================
 // INICIO DE LA APP
