@@ -221,9 +221,8 @@ button.btn-save.guardado{background:#059669;color:#fff;border-color:#059669}
 
     <div class="actbar">
       <button class="add-main" id="btn-add" onclick="addItem()">+ Nuevo Cliente</button>
-      <button class="sec" onclick="exportXLSX()">📥 XLSX</button>
       <button class="sec" onclick="exportJSON()">💾 Backup</button>
-      <button class="sec" id="btn-undo" onclick="undo()" style="display:none;background:rgba(251,191,36,.2);border-color:#f59e0b;color:#92400e">↩ Deshacer</button>
+      <button class="sec" id="btn-undo" onclick="undo()" style="display:none;background:#1d4ed8;border-color:#3b82f6;color:#fff;font-weight:700">↩ Deshacer</button>
       <button class="sec" onclick="document.getElementById('imp').click()">📂 Importar</button>
       <span class="saved" id="saved"></span>
       <input type="file" id="imp" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -235,7 +234,6 @@ button.btn-save.guardado{background:#059669;color:#fff;border-color:#059669}
 
 <div id="lb" class="lightbox" onclick="this.classList.remove('show')"><img id="lbi"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ============================================================
@@ -949,40 +947,7 @@ function importJSON(ev){
     }catch(err){alert('Archivo inválido: '+err.message);}
   };r.readAsText(f);
 }
-function exportXLSX(){
-  try{
-    const s=v=>(v==null?'':String(v));
-    const rows=[['Cliente','Estado Cliente','Proyecto','Estado Proyecto','Abono','% Avance','Nota','Subpunto','ID','Tarea','Estado','Prioridad']];
-    clientes.forEach(c=>{
-      if(!c.proyectos||!c.proyectos.length){
-        rows.push([s(c.nombre),s(c.estado),'','','','','','','','','','']);
-        return;
-      }
-      c.proyectos.forEach(p=>{
-        const allT=allTareasProy(p);
-        const pct=pctOf(allT)+'%';
-        const addRow=(sub,id,tarea,est,pri)=>rows.push([s(c.nombre),s(c.estado),s(p.nombre),s(p.estadoTrabajo),s(p.abono),pct,s(p.nota),s(sub),s(id),s(tarea),s(est),s(pri)]);
-        const proc=(arr,sub)=>arr.forEach(t=>{
-          addRow(sub,t.id,t.tarea,t.estado,t.prioridad);
-          (t.subtareas||[]).forEach(st=>addRow(sub,' -'+s(st.id),st.tarea,st.estado,st.prioridad));
-        });
-        if(p.subpuntos&&p.subpuntos.length){
-          p.subpuntos.forEach(sp=>proc(sp.tareas||[],sp.nombre));
-        } else {
-          proc(p.tareas||[],'');
-        }
-        if(!allT.length) addRow('','','(sin tareas)','','');
-      });
-    });
-    const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:20},{wch:10},{wch:32},{wch:22},{wch:10},{wch:7},{wch:25},{wch:18},{wch:5},{wch:38},{wch:12},{wch:8}];
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,'Proyectos',ws);
-    if(rows.length<=1){alert('Sin datos para exportar. Clientes cargados: '+clientes.length);return;}
-    XLSX.writeFile(wb,'ciaber_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    showSaved('✓ XLSX exportado: '+(rows.length-1)+' filas');
-  }catch(e){alert('Error XLSX: '+e.message);console.error(e);}
-}
+
 </script>
 </body>
 </html>
