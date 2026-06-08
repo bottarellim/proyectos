@@ -58,17 +58,27 @@ const expandedKeys = new Set();
 // ============================================================
 // AUTH
 // ============================================================
-// Supabase JS v2 fires INITIAL_SESSION on page load (if cached session exists),
-// and SIGNED_IN on explicit login. Both must trigger initData.
+// _appInited previene que INITIAL_SESSION + SIGNED_IN (que Supabase
+// puede disparar juntos) lancen dos initData en paralelo.
+let _appInited = false;
+
 sb.auth.onAuthStateChange(async (event, session) => {
   if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session) {
     document.getElementById('login-screen').style.display = 'none';
     document.getElementById('app').style.display = 'block';
     document.getElementById('user-email').textContent = session.user.email;
-    subscribeRealtime();
-    await initData();
+    if (!_appInited) {
+      _appInited = true;
+      subscribeRealtime();
+      await initData();
+    }
+  }
+  if (event === 'TOKEN_REFRESHED' && session) {
+    // Token renovado silenciosamente — no reinicializar datos
+    document.getElementById('user-email').textContent = session.user.email;
   }
   if (event === 'SIGNED_OUT') {
+    _appInited = false;
     document.getElementById('login-screen').style.display = 'flex';
     document.getElementById('app').style.display = 'none';
     document.getElementById('l-btn').textContent = 'Ingresar';
@@ -196,8 +206,14 @@ function migrarDesdeFormatoViejo(viejos) {
 // ============================================================
 // CARGAR DATOS
 // ============================================================
+// Versión incremental: si se lanza un nuevo initData mientras hay uno
+// en curso (por reconexión), el viejo descarta sus resultados.
+let _initVersion = 0;
+
 async function initData(retryN = 0) {
-  // Mostrar datos locales inmediatamente para que la UI no quede en blanco
+  const myVersion = retryN === 0 ? ++_initVersion : _initVersion;
+
+  // Mostrar datos locales inmediatamente
   if (retryN === 0) {
     const local = localStorage.getItem('ciaber_v2');
     if (local) {
@@ -208,13 +224,21 @@ async function initData(retryN = 0) {
     }
     setSyncDot(false, 'Conectando...');
   }
+
+  // Abandonar si ya hay un initData más nuevo en curso
+  if (myVersion !== _initVersion) return;
+
   try {
     const { data: row, error } = await sb.from('app_data').select('clientes').eq('id', 1).single();
     if (error) throw error;
+
+    // Volver a verificar versión tras el await (puede haber pasado tiempo)
+    if (myVersion !== _initVersion) return;
+
     if (row?.clientes && row.clientes.length > 0) {
       clientes = fixClientes(row.clientes);
     } else {
-      // Supabase vacío — intentar migrar desde localStorage o formato viejo
+      // Supabase vacío — usar localStorage o crear estructura inicial
       const localV2 = localStorage.getItem('ciaber_v2');
       const localViejo = localStorage.getItem('ciaber_puntos_v3');
       if (localV2) {
@@ -225,14 +249,19 @@ async function initData(retryN = 0) {
       if (!clientes.length) {
         clientes = [{ id: newId(), nombre: 'Ciaber', estado: 'Activo', nota: '', color: null, proyectos: [] }];
       }
-      await saveToSupabase(); // Solo guardar si es realmente primera vez
+      await saveToSupabase();
     }
+
+    // Una vez más, verificar que seguimos siendo el initData vigente
+    if (myVersion !== _initVersion) return;
+
     localStorage.setItem('ciaber_v2', JSON.stringify({ clientes }));
     _confirmedJson = JSON.stringify(clientes);
     setSyncDot(true);
     renderVista();
   } catch (e) {
     console.error('Error cargando datos:', e);
+    if (myVersion !== _initVersion) return; // Abandonar si somos obsoletos
     if (retryN < 5) {
       setSyncDot(false, 'Reintentando (' + (retryN + 1) + '/5)...');
       setTimeout(() => initData(retryN + 1), Math.min((retryN + 1) * 2000, 10000));
