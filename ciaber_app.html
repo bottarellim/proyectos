@@ -857,8 +857,9 @@ function applyEdit(path,k,val){
       else if(k==='nota')pr.nota=val;
       else if(k==='estadoTrabajo'){pr.estadoTrabajo=val;const col=ET_COLOR[val];if(col)pr.color=col;else delete pr.color;}
       else if(k==='abono')pr.abono=val;
+      else pr[k]=val;
       return;}
-    if(p[1]==='sp'){const pi=+p[2],si=+p[3],s=c.proyectos[pi]?.subpuntos[si];if(!s)return;if(k==='nombreSub')s.nombre=val;else if(k==='descSub')s.desc=val;return;}
+    if(p[1]==='sp'){const pi=+p[2],si=+p[3],s=c.proyectos[pi]?.subpuntos[si];if(!s)return;if(k==='nombreSub')s.nombre=val;else if(k==='descSub')s.desc=val;else s[k]=val;return;}
     if(p[1]==='t'){const pi=+p[2],ti=+p[3],t=c.proyectos[pi]?.tareas[ti];if(!t)return;if(p.length===4)t[k]=val;else if(p.length===5){const st=t.subtareas[+p[4]];if(st)st[k]=val;}return;}
     if(p[1]==='s'){const pi=+p[2],si=+p[3],ti=+p[4],t=c.proyectos[pi]?.subpuntos[si]?.tareas[ti];if(!t)return;if(p.length===5)t[k]=val;else if(p.length===6){const st=t.subtareas[+p[5]];if(st)st[k]=val;}return;}
   }catch(e){console.warn('applyEdit:',e.message);}
