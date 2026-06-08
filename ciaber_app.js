@@ -680,6 +680,7 @@ function renderProyectos(ci) {
           <button class="btn-save it-del" onclick="event.stopPropagation();guardarAhora(this)" title="Guardar proyecto">✓</button>
           <button class="add it-del" style="font-size:10px;padding:2px 6px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})" title="Nueva tarea">+Tarea</button>
           <input type="checkbox" class="sel-cb it-del" data-sel="p|${ci}|${pi}" onclick="event.stopPropagation();toggleSel(this)" title="Seleccionar para eliminar">
+          <button class="del it-del" onclick="event.stopPropagation();delProyecto(${ci},${pi})" title="Eliminar proyecto">✕</button>
         </div>
       </div>
       <div class="it-body" style="display:none">${renderProyectoBody(p, ci, pi)}</div>
