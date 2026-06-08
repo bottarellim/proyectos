@@ -387,16 +387,19 @@ async function initData(retryN=0){
     if(row?.clientes&&row.clientes.length>0){
       clientes=fixClientes(row.clientes);
     } else {
-      // Primera vez — intentar migrar desde localStorage
+      // Supabase devolvió vacío — NO sobreescribir, usar localStorage si tiene datos
       const local=localStorage.getItem('ciaber_puntos_v3');
       const localV2=localStorage.getItem('ciaber_v2');
       if(localV2){
-        try{const d=JSON.parse(localV2);clientes=fixClientes(d.clientes||[]);}catch(e){}
+        try{const d=JSON.parse(localV2);if(d.clientes?.length)clientes=fixClientes(d.clientes);}catch(e){}
       } else if(local){
         try{clientes=migrarDesdeFormatoViejo(JSON.parse(local));}catch(e){}
       }
-      if(!clientes.length){clientes=[{id:newId(),nombre:'Ciaber',estado:'Activo',nota:'',color:null,proyectos:[]}];}
-      await saveToSupabase();
+      // Solo crear cliente por defecto si no hay nada en ningún lado
+      if(!clientes.length){
+        clientes=[{id:newId(),nombre:'Ciaber',estado:'Activo',nota:'',color:null,proyectos:[]}];
+        await saveToSupabase(); // Solo guardar si realmente es primera vez
+      }
     }
     localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
     _confirmedJson=JSON.stringify(clientes);
@@ -452,6 +455,10 @@ function save(){
 }
 
 function forceRelogin(){
+  // Cancelar cualquier save pendiente ANTES de limpiar
+  clearTimeout(window._it);
+  _saving=false;
+  _pendingSave=false;
   sb.auth.signOut().catch(()=>{});
   localStorage.removeItem('ciaber_v2');
   clientes=[];
