@@ -610,8 +610,7 @@ function renderTareas(tareas,ci,pi,kind,si){
 // RENDER PROYECTO BODY
 // ============================================================
 function renderProyectoBody(p,ci,pi){
-  const totalTareas=(p.tareas||[]).length;
-  const totalFases=(p.subpuntos||[]).length;
+  const total=allTareasProy(p).length;
   const adjPath=`Promise.resolve(clientes[${ci}].proyectos[${pi}].adjuntos)`;
   const uploadId='pup_'+p.id;
   const adjItems=(p.adjuntos||[]).map((a,i)=>`
@@ -620,36 +619,27 @@ function renderProyectoBody(p,ci,pi){
       <a onclick="openFile('${a.storage_path}')" title="${ESC(a.nombre)}">${ESC(a.nombre)}</a>
       <span class="adj-del-btn" onclick="${adjPath}.then(arr=>delArchivo(arr,${i}))">✕</span>
     </div>`).join('');
-
-  // Tareas del proyecto (nivel raíz)
-  const tareasHtml=renderTareas(p.tareas||[],ci,pi,'t');
-
-  // Fases (ex-subpuntos) con sus propias tareas
-  const fasesHtml=(p.subpuntos||[]).map((s,si)=>`
-    <div class="subp-node">
-      <div class="subp-head">
-        <span class="toggle-sp" onclick="this.classList.toggle('col');this.parentElement.nextElementSibling.classList.toggle('collapsed-ch')">▼</span>
-        <input data-path="${ci}|sp|${pi}|${si}" data-k="nombreSub" value="${ESC(s.nombre)}" placeholder="Nombre de la fase...">
-        <button class="btn-save" onclick="guardarAhora(this)">✓</button>
-        <button class="del" onclick="delSubpunto(${ci},${pi},${si})">✕</button>
-      </div>
-      <div>
-        <div class="nota-box"><textarea data-path="${ci}|sp|${pi}|${si}" data-k="descSub" placeholder="Descripción de la fase...">${ESC(s.desc||'')}</textarea></div>
-        ${renderTareas(s.tareas||[],ci,pi,'s',si)}
-      </div>
-    </div>`).join('');
+  let tareasHtml='';
+  if(p.subpuntos&&p.subpuntos.length){
+    tareasHtml=p.subpuntos.map((s,si)=>`
+      <div class="subp-node">
+        <div class="subp-head">
+          <span class="toggle-sp" onclick="this.classList.toggle('col');this.parentElement.nextElementSibling.classList.toggle('collapsed-ch')">▼</span>
+          <input data-path="${ci}|sp|${pi}|${si}" data-k="nombreSub" value="${ESC(s.nombre)}" placeholder="Nombre de la fase...">
+          <button class="btn-save" onclick="guardarAhora(this)">✓</button>
+          <button class="del" onclick="delSubpunto(${ci},${pi},${si})">✕</button>
+        </div>
+        <div>
+          <div class="nota-box"><textarea data-path="${ci}|sp|${pi}|${si}" data-k="descSub" placeholder="Descripción de la fase...">${ESC(s.desc||'')}</textarea></div>
+          ${renderTareas(s.tareas||[],ci,pi,'s',si)}
+        </div>
+      </div>`).join('');
+  } else {
+    tareasHtml=renderTareas(p.tareas||[],ci,pi,'t');
+  }
+  tareasHtml+=`<button class="add" onclick="quickAddSub(${ci},${pi})" style="border-color:#bae6fd;color:#0369a1;margin-top:4px">+ Nueva Fase</button>`;
 
   return `
-    <div class="tareas-toggle" data-tkey="tareas-${ci}-${pi}" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('tareas-${ci}-${pi}');else expandedKeys.delete('tareas-${ci}-${pi}')">
-      <span class="t-arrow">▶</span> Tareas <span style="color:#9ca3af;font-weight:400">(${totalTareas})</span>
-      <button class="add" style="font-size:11px;padding:1px 8px;margin-left:8px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})">+ Nueva Tarea</button>
-    </div>
-    <div style="display:none">${tareasHtml}</div>
-    <div class="tareas-toggle" data-tkey="fases-${ci}-${pi}" style="background:#dbeafe;color:#1e40af" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('fases-${ci}-${pi}');else expandedKeys.delete('fases-${ci}-${pi}')">
-      <span class="t-arrow">▶</span> Fases <span style="color:#60a5fa;font-weight:400">(${totalFases})</span>
-      <button class="add" style="font-size:11px;padding:1px 8px;margin-left:8px;border-color:#93c5fd;color:#1d4ed8" onclick="event.stopPropagation();quickAddSub(${ci},${pi})">+ Nueva Fase</button>
-    </div>
-    <div style="display:none">${fasesHtml}</div>
     <div class="nota-box"><textarea data-path="${ci}|p|${pi}" data-k="nota" placeholder="Notas del proyecto...">${ESC(p.nota||'')}</textarea></div>
     <div class="adj-section">
       <div class="adj-title">📎 Adjuntos del proyecto
@@ -658,7 +648,12 @@ function renderProyectoBody(p,ci,pi){
           onchange="${adjPath}.then(arr=>handleUpload(event,'proyecto','${p.id}',arr))">
       </div>
       <div class="adj-list">${adjItems}</div>
-    </div>`;
+    </div>
+    <div class="tareas-toggle" data-tkey="tareas-${ci}-${pi}" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('tareas-${ci}-${pi}');else expandedKeys.delete('tareas-${ci}-${pi}')">
+      <span class="t-arrow">▶</span> Tareas <span style="color:#9ca3af;font-weight:400">(${total})</span>
+      <button class="add" style="font-size:11px;padding:1px 8px;margin-left:8px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})">+ Nueva Tarea</button>
+    </div>
+    <div style="display:none">${tareasHtml}</div>`;
 }
 
 // ============================================================
@@ -860,10 +855,9 @@ function guardarAhora(btn){
 function quickAddTarea(ci,pi){
   pushHistory();
   const p=clientes[ci].proyectos[pi];
-  // Siempre agregar a tareas directas del proyecto (no a fases)
-  if(!p.tareas)p.tareas=[];
-  const nid=(p.tareas.length+1).toString().padStart(2,'0');
-  p.tareas.push({id:nid,tarea:'Nueva tarea',estado:'Pendiente',prioridad:'Media',adjuntos:[],subtareas:[]});
+  const arr=(p.subpuntos&&p.subpuntos.length)?p.subpuntos[p.subpuntos.length-1].tareas:p.tareas;
+  const nid=(arr.length+1).toString().padStart(2,'0');
+  arr.push({id:nid,tarea:'Nueva tarea',estado:'Pendiente',prioridad:'Media',adjuntos:[],subtareas:[]});
   expandedKeys.add('p-'+ci+'-'+pi);
   expandedKeys.add('tareas-'+ci+'-'+pi);
   save();renderVista();
