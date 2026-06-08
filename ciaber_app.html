@@ -621,6 +621,7 @@ function renderTareas(tareas,ci,pi,kind,si){
         <button class="btn-save" onclick="guardarAhora(this)">✓</button>
         <button class="btn-sub" onclick="addSub('${base}')">+sub</button>
         <input type="checkbox" class="sel-cb" data-sel="t|${base}" onclick="toggleSel(this)" title="Seleccionar para eliminar">
+        <button class="del" onclick="delTarea('${base}')">✕</button>
       </div></div>`;
     if((t.subtareas||[]).length){
       html+=`<div style="margin-left:14px">`;
@@ -635,6 +636,7 @@ function renderTareas(tareas,ci,pi,kind,si){
             <select class="est" data-path="${spath}" data-k="estado">${opt(ESTADOS,st.estado)}</select>
             <select class="pri" data-path="${spath}" data-k="prioridad">${opt(PRIORIDADES,st.prioridad)}</select>
             <input type="checkbox" class="sel-cb" data-sel="st|${spath}" onclick="toggleSel(this)" title="Seleccionar para eliminar">
+            <button class="del" onclick="delSub('${spath}')">✕</button>
           </div></div>`;
       });
       html+=`</div>`;
