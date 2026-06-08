@@ -1034,4 +1034,23 @@ function delSub(path){
 // ============================================================
 // ============================================================
 function exportJSON(){
-  const blob=new Blob([JSON.stringify({clientes},null,2)],{type:'appli
+  const blob=new Blob([JSON.stringify({clientes},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='ciaber_backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();
+}
+function importJSON(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(d.clientes)clientes=fixClientes(d.clientes);
+      else if(Array.isArray(d))clientes=migrarDesdeFormatoViejo(d);
+      save();renderVista();alert('Importado correctamente.');
+    }catch(err){alert('Archivo inválido: '+err.message);}
+  };r.readAsText(f);
+}
+
+</script>
+</body>
+</html>
