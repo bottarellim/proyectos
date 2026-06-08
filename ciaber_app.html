@@ -744,8 +744,10 @@ function renderProyectos(ci){
   document.getElementById('btn-add').textContent='+ Nuevo Proyecto';
   document.getElementById('filtroAbono').style.display='';
   const filtroSel=document.getElementById('filtroEstado');
+  const savedFv=filtroSel.value;
   filtroSel.innerHTML='<option value="">📋 Todos los estados</option>';
   GRUPOS_TRABAJO.forEach(g=>{const og=document.createElement('optgroup');og.label=g.g;g.e.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;og.appendChild(o);});filtroSel.appendChild(og);});
+  if(savedFv)filtroSel.value=savedFv;
   const q=document.getElementById('q').value.toLowerCase();
   const fv=filtroSel.value;
   const fAb=document.getElementById('filtroAbono').value;
