@@ -211,7 +211,6 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 
     <div class="actbar">
       <button class="add-main" id="btn-add" onclick="addItem()">+ Nuevo Cliente</button>
-      <button class="sec" onclick="exportXLSX()">📥 XLSX</button>
       <button class="sec" onclick="exportJSON()">💾 Backup</button>
       <button class="sec" onclick="document.getElementById('imp').click()">📂 Importar</button>
       <span class="saved" id="saved"></span>
@@ -224,7 +223,6 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 
 <div id="lb" class="lightbox" onclick="this.classList.remove('show')"><img id="lbi"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ============================================================
@@ -298,7 +296,8 @@ let clientes=[];
 let vistaActual='clientes';
 let clienteActual=null;
 let _saving=false;
-let _ownUpdate=false;
+let _pendingSave=false;
+const _ownTimestamps=new Set();
 
 function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 
@@ -365,15 +364,20 @@ async function initData(){
 }
 
 async function saveToSupabase(){
-  if(_saving)return;
+  if(_saving){_pendingSave=true;return;}
   _saving=true;
-  _ownUpdate=true;
+  const ts=new Date().toISOString();
+  _ownTimestamps.add(ts);
   try{
-    await sb.from('app_data').upsert({id:1,clientes,updated_at:new Date().toISOString()});
+    await sb.from('app_data').upsert({id:1,clientes,updated_at:ts});
     localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
-  }catch(e){console.error('Error guardando:',e);showSaved('⚠ Error al guardar');}
+  }catch(e){
+    console.error('Error guardando:',e);
+    showSaved('⚠ Error al guardar');
+    _ownTimestamps.delete(ts);
+  }
   _saving=false;
-  setTimeout(()=>{_ownUpdate=false;},3000);
+  if(_pendingSave){_pendingSave=false;await saveToSupabase();}
 }
 
 function save(){
@@ -397,12 +401,19 @@ function setSyncDot(on){
 function subscribeRealtime(){
   sb.channel('app_realtime')
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_data'},payload=>{
-      if(payload.new?.clientes&&!_ownUpdate){
-        clientes=fixClientes(payload.new.clientes);
-        localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
-        renderVista();
-        showSaved('↻ Actualizado por otro usuario');
+      if(!payload.new?.clientes)return;
+      const ts=payload.new?.updated_at;
+      if(ts&&_ownTimestamps.has(ts)){_ownTimestamps.delete(ts);return;}
+      const prevClientId=clienteActual!=null?clientes[clienteActual]?.id:null;
+      clientes=fixClientes(payload.new.clientes);
+      localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
+      if(prevClientId&&vistaActual==='proyectos'){
+        const newIdx=clientes.findIndex(c=>c.id===prevClientId);
+        if(newIdx>=0)clienteActual=newIdx;
+        else{clienteActual=null;vistaActual='clientes';}
       }
+      renderVista();
+      showSaved('↻ Actualizado por otro usuario');
     })
     .subscribe(status=>{setSyncDot(status==='SUBSCRIBED');});
 }
@@ -663,7 +674,7 @@ function renderProyectos(ci){
     return `<div class="it-wrap" data-ek="p-${ci}-${pi}">
       <div class="it-row">
         <div class="it-strip" style="background:${strip}"></div>
-        <span class="it-arrow" onclick="toggleExpand(this)" title="Expandir/Contraer" style="cursor:pointer;padding:12px 6px">▶</span>
+        <span class="it-arrow" onclick="toggleExpand(event)" title="Expandir/Contraer" style="cursor:pointer;padding:12px 6px">▶</span>
         <input class="nm-c" data-path="${ci}|p|${pi}" data-k="nombre" value="${ESC(p.nombre)}" onclick="event.stopPropagation()">
         <div class="it-meta">
           <select class="est-trabajo ${ET_CLASS[p.estadoTrabajo||'Sin Iniciar']||'etj-SinIniciar'}" data-path="${ci}|p|${pi}" data-k="estadoTrabajo" onclick="event.stopPropagation()">${optTrabajo(p.estadoTrabajo||'Sin Iniciar')}</select>
@@ -704,9 +715,9 @@ function restoreExpanded(){
   });
 }
 
-function toggleExpand(arrow){
-  arrow.stopPropagation&&arrow.stopPropagation();
-  const wrap=arrow.closest('.it-wrap');
+function toggleExpand(ev){
+  ev.stopPropagation();
+  const wrap=ev.currentTarget.closest('.it-wrap');
   const row=wrap.querySelector('.it-row');
   const body=wrap.querySelector('.it-body');
   const isOpen=row.classList.contains('it-open');
@@ -725,10 +736,15 @@ function renderVista(){
 // ============================================================
 // EVENTOS DE EDICIÓN
 // ============================================================
+function _onRootChange(ev){const t=ev.target;if(!t.dataset.path)return;applyEdit(t.dataset.path,t.dataset.k,t.value);save();renderVista();}
+function _onRootInput(ev){const t=ev.target;if(!t.dataset.path||t.tagName==='SELECT')return;clearTimeout(window._it);window._it=setTimeout(()=>{applyEdit(t.dataset.path,t.dataset.k,t.value);save();},600);}
+let _eventsBound=false;
 function bindEvents(){
+  if(_eventsBound)return;
   const root=document.getElementById('root');
-  root.addEventListener('change',ev=>{const t=ev.target;if(!t.dataset.path)return;applyEdit(t.dataset.path,t.dataset.k,t.value);save();renderVista();},{once:true});
-  root.addEventListener('input',ev=>{const t=ev.target;if(!t.dataset.path||t.tagName==='SELECT')return;clearTimeout(window._it);window._it=setTimeout(()=>{applyEdit(t.dataset.path,t.dataset.k,t.value);save();},600);},{once:true});
+  root.addEventListener('change',_onRootChange);
+  root.addEventListener('input',_onRootInput);
+  _eventsBound=true;
 }
 document.getElementById('q').oninput=renderVista;
 
@@ -752,8 +768,15 @@ function applyEdit(path,k,val){
 // ACCIONES
 // ============================================================
 function addItem(){
-  if(vistaActual==='clientes'){clientes.push({id:newId(),nombre:'Nuevo Cliente',estado:'Activo',nota:'',color:null,proyectos:[]});}
-  else{if(clienteActual==null)return;clientes[clienteActual].proyectos.push({id:newId(),nombre:'Nuevo Proyecto',estadoTrabajo:'Sin Iniciar',abono:'Sin Abono',color:null,nota:'',adjuntos:[],fechaTerminado:null,tareas:[],subpuntos:[]});}
+  if(vistaActual==='clientes'){
+    clientes.push({id:newId(),nombre:'Nuevo Cliente',estado:'Activo',nota:'',color:null,proyectos:[]});
+  } else {
+    if(clienteActual==null)return;
+    const ci=clienteActual;
+    clientes[ci].proyectos.push({id:newId(),nombre:'Nuevo Proyecto',estadoTrabajo:'Sin Iniciar',abono:'Sin Abono',color:null,nota:'',adjuntos:[],fechaTerminado:null,tareas:[],subpuntos:[]});
+    const pi=clientes[ci].proyectos.length-1;
+    expandedKeys.add('p-'+ci+'-'+pi);
+  }
   save();renderVista();
 }
 function delCliente(ci){if(!confirm(`¿Eliminar cliente "${clientes[ci].nombre}"?`))return;clientes.splice(ci,1);save();renderVista();}
@@ -825,40 +848,7 @@ function importJSON(ev){
     }catch(err){alert('Archivo inválido: '+err.message);}
   };r.readAsText(f);
 }
-function exportXLSX(){
-  try{
-    const s=v=>(v==null?'':String(v));
-    const rows=[['Cliente','Estado Cliente','Proyecto','Estado Proyecto','Abono','% Avance','Nota','Subpunto','ID','Tarea','Estado','Prioridad']];
-    clientes.forEach(c=>{
-      if(!c.proyectos||!c.proyectos.length){
-        rows.push([s(c.nombre),s(c.estado),'','','','','','','','','','']);
-        return;
-      }
-      c.proyectos.forEach(p=>{
-        const allT=allTareasProy(p);
-        const pct=pctOf(allT)+'%';
-        const addRow=(sub,id,tarea,est,pri)=>rows.push([s(c.nombre),s(c.estado),s(p.nombre),s(p.estadoTrabajo),s(p.abono),pct,s(p.nota),s(sub),s(id),s(tarea),s(est),s(pri)]);
-        const proc=(arr,sub)=>arr.forEach(t=>{
-          addRow(sub,t.id,t.tarea,t.estado,t.prioridad);
-          (t.subtareas||[]).forEach(st=>addRow(sub,' -'+s(st.id),st.tarea,st.estado,st.prioridad));
-        });
-        if(p.subpuntos&&p.subpuntos.length){
-          p.subpuntos.forEach(sp=>proc(sp.tareas||[],sp.nombre));
-        } else {
-          proc(p.tareas||[],'');
-        }
-        if(!allT.length) addRow('','','(sin tareas)','','');
-      });
-    });
-    const ws=XLSX.utils.aoa_to_sheet(rows);
-    ws['!cols']=[{wch:20},{wch:10},{wch:32},{wch:22},{wch:10},{wch:7},{wch:25},{wch:18},{wch:5},{wch:38},{wch:12},{wch:8}];
-    const wb=XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb,'Proyectos',ws);
-    if(rows.length<=1){alert('Sin datos para exportar. Clientes cargados: '+clientes.length);return;}
-    XLSX.writeFile(wb,'ciaber_'+new Date().toISOString().slice(0,10)+'.xlsx');
-    showSaved('✓ XLSX exportado: '+(rows.length-1)+' filas');
-  }catch(e){alert('Error XLSX: '+e.message);console.error(e);}
-}
+
 </script>
 </body>
 </html>
