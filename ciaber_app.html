@@ -171,6 +171,11 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 button.btn-save{background:#d1fae5;color:#065f46;border:1px solid #6ee7b7;padding:2px 7px;font-size:11px;border-radius:5px;box-shadow:none;font-weight:700;transition:all .15s}
 button.btn-save:hover{background:#059669;color:#fff;border-color:#059669}
 button.btn-save.guardado{background:#059669;color:#fff;border-color:#059669}
+
+/* === Reconexión === */
+.sync-dot{cursor:pointer}
+.sync-label{font-size:11px;color:rgba(255,255,255,.6);margin-left:2px;white-space:nowrap}
+.sync-label.err{color:#fca5a5;font-weight:600}
 /* === Lightbox === */
 .lightbox{position:fixed;inset:0;background:rgba(0,0,0,.88);display:none;align-items:center;justify-content:center;z-index:200;cursor:pointer}
 .lightbox.show{display:flex}
@@ -197,7 +202,7 @@ button.btn-save.guardado{background:#059669;color:#fff;border-color:#059669}
       <h1 class="topbar-logo">Harf-Tele</h1>
       <div class="breadcrumb" id="breadcrumb"><span class="cur">Clientes</span></div>
     </div>
-    <span class="sync-dot off" id="sync-dot"></span>
+    <span class="sync-dot off" id="sync-dot" title="Click para reconectar" onclick="reconectar()"></span><span class="sync-label err" id="sync-label">Sin conexión</span>
     <span class="user-pill" id="user-email"></span>
     <button class="btn-logout" onclick="doLogout()">Salir</button>
   </div>
@@ -339,7 +344,7 @@ function migrarDesdeFormatoViejo(viejos){
   return [c];
 }
 
-async function initData(){
+async function initData(retryN=0){
   setSyncDot(false);
   try{
     const {data:row,error}=await sb.from('app_data').select('clientes').eq('id',1).single();
@@ -366,10 +371,14 @@ async function initData(){
     if(local){
       try{const d=JSON.parse(local);clientes=fixClientes(d.clientes||[]);}catch(e2){}
       showSaved('⚠ Sin conexión — mostrando datos locales');
+      renderVista();
     } else {
       showSaved('⚠ Sin conexión y sin datos locales');
     }
-    renderVista();
+    if(retryN<3){
+      const delay=(retryN+1)*4000;
+      setTimeout(()=>initData(retryN+1),delay);
+    }
   }
 }
 
@@ -404,27 +413,30 @@ function showSaved(msg){
   if(!msg.startsWith('⏳'))window._st=setTimeout(()=>s.textContent='',2500);
 }
 
-function setSyncDot(on){
+function setSyncDot(on,msg){
   const d=document.getElementById('sync-dot');
+  const l=document.getElementById('sync-label');
   if(d)d.className='sync-dot'+(on?'':' off');
+  if(l){l.textContent=msg||(on?'':'Sin conexión');l.className='sync-label'+(on?'':' err');}
 }
 
+let _rtChannel=null;
+let _rtRetryCount=0;
+let _rtRetryTimer=null;
 function subscribeRealtime(){
-  sb.channel('app_realtime')
+  clearTimeout(_rtRetryTimer);
+  if(_rtChannel){try{sb.removeChannel(_rtChannel);}catch(e){}}
+  _rtChannel=sb.channel('app_rt_'+Date.now())
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_data'},payload=>{
       if(!payload.new?.clientes)return;
       const ts=payload.new?.updated_at;
-      // Ignorar eventos de nuestros propios saves
       if(ts&&_ownTimestamps.has(ts)){_ownTimestamps.delete(ts);return;}
-      // No sobreescribir si hay un save en curso o pendiente (evita race condition)
       if(_saving||_pendingSave)return;
-      // Guardar id del cliente actual antes de sobreescribir
       const prevClientId=clienteActual!=null?clientes[clienteActual]?.id:null;
-      pushHistory(); // guardar estado actual antes de overwrite externo
+      pushHistory();
       clientes=fixClientes(payload.new.clientes);
       _confirmedJson=JSON.stringify(clientes);
       localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
-      // Reubicar clienteActual por id (no por índice)
       if(prevClientId&&vistaActual==='proyectos'){
         const newIdx=clientes.findIndex(c=>c.id===prevClientId);
         if(newIdx>=0)clienteActual=newIdx;
@@ -433,7 +445,24 @@ function subscribeRealtime(){
       renderVista();
       showSaved('↻ Actualizado por otro usuario');
     })
-    .subscribe(status=>{setSyncDot(status==='SUBSCRIBED');});
+    .subscribe(status=>{
+      const ok=status==='SUBSCRIBED';
+      setSyncDot(ok, ok?'': status==='TIMED_OUT'?'Timeout':'Sin conexión');
+      if(!ok&&status!=='SUBSCRIBING'){
+        const delay=Math.min(_rtRetryCount*5000+5000,30000);
+        _rtRetryCount++;
+        setSyncDot(false,'Reintentando...');
+        _rtRetryTimer=setTimeout(subscribeRealtime,delay);
+      } else if(ok){
+        _rtRetryCount=0;
+      }
+    });
+}
+async function reconectar(){
+  setSyncDot(false,'Reconectando...');
+  _rtRetryCount=0;
+  subscribeRealtime();
+  await initData();
 }
 
 // ============================================================
