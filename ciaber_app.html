@@ -211,7 +211,9 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 
     <div class="actbar">
       <button class="add-main" id="btn-add" onclick="addItem()">+ Nuevo Cliente</button>
+      <button class="sec" onclick="exportXLSX()">📥 XLSX</button>
       <button class="sec" onclick="exportJSON()">💾 Backup</button>
+      <button class="sec" id="btn-undo" onclick="undo()" style="display:none;background:rgba(251,191,36,.2);border-color:#f59e0b;color:#92400e">↩ Deshacer</button>
       <button class="sec" onclick="document.getElementById('imp').click()">📂 Importar</button>
       <span class="saved" id="saved"></span>
       <input type="file" id="imp" accept=".json" style="display:none" onchange="importJSON(event)">
@@ -223,6 +225,7 @@ select.est-cliente{border:none;border-radius:12px;padding:2px 8px;font-size:11px
 
 <div id="lb" class="lightbox" onclick="this.classList.remove('show')"><img id="lbi"></div>
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script>
 // ============================================================
@@ -297,7 +300,9 @@ let vistaActual='clientes';
 let clienteActual=null;
 let _saving=false;
 let _pendingSave=false;
+let _confirmedJson=null;
 const _ownTimestamps=new Set();
+const _history=[];
 
 function newId(){return Date.now().toString(36)+Math.random().toString(36).slice(2,6);}
 
@@ -371,6 +376,7 @@ async function saveToSupabase(){
   try{
     await sb.from('app_data').upsert({id:1,clientes,updated_at:ts});
     localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
+    _confirmedJson=JSON.stringify(clientes);
   }catch(e){
     console.error('Error guardando:',e);
     showSaved('⚠ Error al guardar');
@@ -403,10 +409,17 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'UPDATE',schema:'public',table:'app_data'},payload=>{
       if(!payload.new?.clientes)return;
       const ts=payload.new?.updated_at;
+      // Ignorar eventos de nuestros propios saves
       if(ts&&_ownTimestamps.has(ts)){_ownTimestamps.delete(ts);return;}
+      // No sobreescribir si hay un save en curso o pendiente (evita race condition)
+      if(_saving||_pendingSave)return;
+      // Guardar id del cliente actual antes de sobreescribir
       const prevClientId=clienteActual!=null?clientes[clienteActual]?.id:null;
+      pushHistory(); // guardar estado actual antes de overwrite externo
       clientes=fixClientes(payload.new.clientes);
+      _confirmedJson=JSON.stringify(clientes);
       localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
+      // Reubicar clienteActual por id (no por índice)
       if(prevClientId&&vistaActual==='proyectos'){
         const newIdx=clientes.findIndex(c=>c.id===prevClientId);
         if(newIdx>=0)clienteActual=newIdx;
@@ -741,9 +754,8 @@ function _onRootInput(ev){const t=ev.target;if(!t.dataset.path||t.tagName==='SEL
 let _eventsBound=false;
 function bindEvents(){
   if(_eventsBound)return;
-  const root=document.getElementById('root');
-  root.addEventListener('change',_onRootChange);
-  root.addEventListener('input',_onRootInput);
+  document.getElementById('root').addEventListener('change',_onRootChange);
+  document.getElementById('root').addEventListener('input',_onRootInput);
   _eventsBound=true;
 }
 document.getElementById('q').oninput=renderVista;
@@ -767,26 +779,49 @@ function applyEdit(path,k,val){
 // ============================================================
 // ACCIONES
 // ============================================================
+
+// ============================================================
+// HISTORIAL / DESHACER
+// ============================================================
+function pushHistory(){
+  _history.push(JSON.stringify({clientes:JSON.parse(JSON.stringify(clientes)),vistaActual,clienteActual}));
+  if(_history.length>20)_history.shift();
+  updateUndoBtn();
+}
+function undo(){
+  if(!_history.length)return;
+  const prev=JSON.parse(_history.pop());
+  clientes=fixClientes(prev.clientes);
+  vistaActual=prev.vistaActual;
+  clienteActual=prev.clienteActual;
+  updateUndoBtn();
+  save();renderVista();
+  showSaved('↩ Deshecho');
+}
+function updateUndoBtn(){
+  const b=document.getElementById('btn-undo');
+  if(b)b.style.display=_history.length?'':'none';
+}
 function addItem(){
+  pushHistory();
   if(vistaActual==='clientes'){
     clientes.push({id:newId(),nombre:'Nuevo Cliente',estado:'Activo',nota:'',color:null,proyectos:[]});
   } else {
     if(clienteActual==null)return;
     const ci=clienteActual;
     clientes[ci].proyectos.push({id:newId(),nombre:'Nuevo Proyecto',estadoTrabajo:'Sin Iniciar',abono:'Sin Abono',color:null,nota:'',adjuntos:[],fechaTerminado:null,tareas:[],subpuntos:[]});
-    const pi=clientes[ci].proyectos.length-1;
-    expandedKeys.add('p-'+ci+'-'+pi);
+    expandedKeys.add('p-'+ci+'-'+(clientes[ci].proyectos.length-1));
   }
   save();renderVista();
 }
-function delCliente(ci){if(!confirm(`¿Eliminar cliente "${clientes[ci].nombre}"?`))return;clientes.splice(ci,1);save();renderVista();}
-function delProyecto(ci,pi){if(!confirm(`¿Eliminar proyecto "${clientes[ci].proyectos[pi].nombre}"?`))return;clientes[ci].proyectos.splice(pi,1);save();renderVista();}
+function delCliente(ci){if(!confirm(`¿Eliminar cliente "${clientes[ci].nombre}"?`))return;pushHistory();clientes.splice(ci,1);save();renderVista();}
+function delProyecto(ci,pi){if(!confirm(`¿Eliminar proyecto "${clientes[ci].proyectos[pi].nombre}"?`))return;pushHistory();clientes[ci].proyectos.splice(pi,1);save();renderVista();}
 function addSubpunto(ci,pi){
   const p=clientes[ci].proyectos[pi];if(!p.subpuntos)p.subpuntos=[];
   if(!p.subpuntos.length&&p.tareas&&p.tareas.length&&confirm('¿Mover tareas a subpunto "General"?')){p.subpuntos.push({id:newId(),nombre:'General',desc:'',tareas:p.tareas});p.tareas=[];}
   p.subpuntos.push({id:newId(),nombre:'Nuevo subpunto',desc:'',tareas:[]});save();renderVista();
 }
-function delSubpunto(ci,pi,si){const p=clientes[ci].proyectos[pi];if(!confirm(`¿Eliminar subpunto "${p.subpuntos[si].nombre}"?`))return;p.subpuntos.splice(si,1);if(!p.subpuntos.length)p.subpuntos=[];save();renderVista();}
+function delSubpunto(ci,pi,si){const p=clientes[ci].proyectos[pi];if(!confirm(`¿Eliminar subpunto "${p.subpuntos[si].nombre}"?`))return;pushHistory();p.subpuntos.splice(si,1);if(!p.subpuntos.length)p.subpuntos=[];save();renderVista();}
 function addTarea(addPath){
   const p=addPath.split('|'),ci=+p[1],pi=+p[2];
   const arr=p[0]==='s'?clientes[ci].proyectos[pi].subpuntos[+p[3]].tareas:clientes[ci].proyectos[pi].tareas;
@@ -806,8 +841,8 @@ function addTarea(addPath){
 function delTarea(path){
   const p=path.split('|'),ci=+p[0];
   let arr;
-  if(p[1]==='t'){arr=clientes[ci].proyectos[+p[2]].tareas;if(!confirm(`¿Eliminar tarea?`))return;arr.splice(+p[3],1);}
-  else if(p[1]==='s'){arr=clientes[ci].proyectos[+p[2]].subpuntos[+p[3]].tareas;if(!confirm(`¿Eliminar tarea?`))return;arr.splice(+p[4],1);}
+  if(p[1]==='t'){arr=clientes[ci].proyectos[+p[2]].tareas;if(!confirm(`¿Eliminar tarea?`))return;pushHistory();arr.splice(+p[3],1);}
+  else if(p[1]==='s'){arr=clientes[ci].proyectos[+p[2]].subpuntos[+p[3]].tareas;if(!confirm(`¿Eliminar tarea?`))return;pushHistory();arr.splice(+p[4],1);}
   save();renderVista();
 }
 function addSub(path){
@@ -824,7 +859,7 @@ function delSub(path){
   let t;
   if(p[1]==='t')t=clientes[ci].proyectos[+p[2]].tareas[+p[3]];
   else if(p[1]==='s')t=clientes[ci].proyectos[+p[2]].subpuntos[+p[3]].tareas[+p[4]];
-  if(t&&confirm('¿Eliminar subtarea?'))t.subtareas.splice(+p[p.length-1],1);
+  if(t&&confirm('¿Eliminar subtarea?')){pushHistory();t.subtareas.splice(+p[p.length-1],1);}
   save();renderVista();
 }
 
@@ -842,13 +877,47 @@ function importJSON(ev){
   r.onload=e=>{
     try{
       const d=JSON.parse(e.target.result);
+      pushHistory();
       if(d.clientes)clientes=fixClientes(d.clientes);
       else if(Array.isArray(d))clientes=migrarDesdeFormatoViejo(d);
       save();renderVista();alert('Importado correctamente.');
     }catch(err){alert('Archivo inválido: '+err.message);}
   };r.readAsText(f);
 }
-
+function exportXLSX(){
+  try{
+    const s=v=>(v==null?'':String(v));
+    const rows=[['Cliente','Estado Cliente','Proyecto','Estado Proyecto','Abono','% Avance','Nota','Subpunto','ID','Tarea','Estado','Prioridad']];
+    clientes.forEach(c=>{
+      if(!c.proyectos||!c.proyectos.length){
+        rows.push([s(c.nombre),s(c.estado),'','','','','','','','','','']);
+        return;
+      }
+      c.proyectos.forEach(p=>{
+        const allT=allTareasProy(p);
+        const pct=pctOf(allT)+'%';
+        const addRow=(sub,id,tarea,est,pri)=>rows.push([s(c.nombre),s(c.estado),s(p.nombre),s(p.estadoTrabajo),s(p.abono),pct,s(p.nota),s(sub),s(id),s(tarea),s(est),s(pri)]);
+        const proc=(arr,sub)=>arr.forEach(t=>{
+          addRow(sub,t.id,t.tarea,t.estado,t.prioridad);
+          (t.subtareas||[]).forEach(st=>addRow(sub,' -'+s(st.id),st.tarea,st.estado,st.prioridad));
+        });
+        if(p.subpuntos&&p.subpuntos.length){
+          p.subpuntos.forEach(sp=>proc(sp.tareas||[],sp.nombre));
+        } else {
+          proc(p.tareas||[],'');
+        }
+        if(!allT.length) addRow('','','(sin tareas)','','');
+      });
+    });
+    const ws=XLSX.utils.aoa_to_sheet(rows);
+    ws['!cols']=[{wch:20},{wch:10},{wch:32},{wch:22},{wch:10},{wch:7},{wch:25},{wch:18},{wch:5},{wch:38},{wch:12},{wch:8}];
+    const wb=XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb,'Proyectos',ws);
+    if(rows.length<=1){alert('Sin datos para exportar. Clientes cargados: '+clientes.length);return;}
+    XLSX.writeFile(wb,'ciaber_'+new Date().toISOString().slice(0,10)+'.xlsx');
+    showSaved('✓ XLSX exportado: '+(rows.length-1)+' filas');
+  }catch(e){alert('Error XLSX: '+e.message);console.error(e);}
+}
 </script>
 </body>
 </html>
