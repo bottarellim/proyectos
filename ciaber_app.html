@@ -651,6 +651,11 @@ function renderProyectoBody(p,ci,pi){
   tareasHtml+=`<button class="add" onclick="quickAddSub(${ci},${pi})" style="border-color:#bae6fd;color:#0369a1;margin-top:4px">+ Nueva Fase</button>`;
 
   return `
+    <div class="tareas-toggle" data-tkey="tareas-${ci}-${pi}" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('tareas-${ci}-${pi}');else expandedKeys.delete('tareas-${ci}-${pi}')">
+      <span class="t-arrow">▶</span> Tareas <span style="color:#9ca3af;font-weight:400">(${total})</span>
+      <button class="add" style="font-size:11px;padding:1px 8px;margin-left:8px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})">+ Nueva Tarea</button>
+    </div>
+    <div style="display:none">${tareasHtml}</div>
     <div class="nota-box"><textarea data-path="${ci}|p|${pi}" data-k="nota" placeholder="Notas del proyecto...">${ESC(p.nota||'')}</textarea></div>
     <div class="adj-section">
       <div class="adj-title">📎 Adjuntos del proyecto
@@ -659,12 +664,7 @@ function renderProyectoBody(p,ci,pi){
           onchange="${adjPath}.then(arr=>handleUpload(event,'proyecto','${p.id}',arr))">
       </div>
       <div class="adj-list">${adjItems}</div>
-    </div>
-    <div class="tareas-toggle" data-tkey="tareas-${ci}-${pi}" onclick="this.classList.toggle('t-open');this.nextElementSibling.style.display=this.classList.contains('t-open')?'block':'none';if(this.classList.contains('t-open'))expandedKeys.add('tareas-${ci}-${pi}');else expandedKeys.delete('tareas-${ci}-${pi}')">
-      <span class="t-arrow">▶</span> Tareas <span style="color:#9ca3af;font-weight:400">(${total})</span>
-      <button class="add" style="font-size:11px;padding:1px 8px;margin-left:8px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})">+ Nueva Tarea</button>
-    </div>
-    <div style="display:none">${tareasHtml}</div>`;
+    </div>`;
 }
 
 // ============================================================
