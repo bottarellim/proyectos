@@ -271,8 +271,8 @@ sb.auth.onAuthStateChange(async(event,session)=>{
     document.getElementById('login-screen').style.display='none';
     document.getElementById('app').style.display='block';
     document.getElementById('user-email').textContent=session.user.email;
-    await initData();
     subscribeRealtime();
+    await initData();
   }
   if(event==='SIGNED_OUT'){
     document.getElementById('login-screen').style.display='flex';
@@ -343,9 +343,17 @@ function migrarDesdeFormatoViejo(viejos){
 }
 
 async function initData(retryN=0){
-  setSyncDot(false);
+  // En el primer intento: mostrar datos locales YA para que la UI no quede en blanco
+  if(retryN===0){
+    const local=localStorage.getItem('ciaber_v2');
+    if(local){
+      try{const d=JSON.parse(local);if(d.clientes?.length){clientes=fixClientes(d.clientes);renderVista();}}catch(e){}
+    }
+    setSyncDot(false,'Conectando...');
+  }
   try{
     const {data:row,error}=await sb.from('app_data').select('clientes').eq('id',1).single();
+    if(error)throw error;
     if(row?.clientes&&row.clientes.length>0){
       clientes=fixClientes(row.clientes);
     } else {
@@ -360,22 +368,19 @@ async function initData(retryN=0){
       if(!clientes.length){clientes=[{id:newId(),nombre:'Ciaber',estado:'Activo',nota:'',color:null,proyectos:[]}];}
       await saveToSupabase();
     }
+    localStorage.setItem('ciaber_v2',JSON.stringify({clientes}));
+    _confirmedJson=JSON.stringify(clientes);
     setSyncDot(true);
     renderVista();
   }catch(e){
     console.error('Error cargando datos:',e);
-    setSyncDot(false);
-    const local=localStorage.getItem('ciaber_v2');
-    if(local){
-      try{const d=JSON.parse(local);clientes=fixClientes(d.clientes||[]);}catch(e2){}
-      showSaved('⚠ Sin conexión — mostrando datos locales');
-      renderVista();
-    } else {
-      showSaved('⚠ Sin conexión y sin datos locales');
-    }
-    if(retryN<3){
-      const delay=(retryN+1)*4000;
+    if(retryN<5){
+      const delay=Math.min((retryN+1)*2000,10000);
+      setSyncDot(false,'Reintentando ('+(retryN+1)+'/5)...');
       setTimeout(()=>initData(retryN+1),delay);
+    } else {
+      setSyncDot(false,'Sin conexión');
+      showSaved('⚠ Sin conexión — datos locales');
     }
   }
 }
