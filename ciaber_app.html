@@ -82,8 +82,8 @@ input.nm-c:hover,input.nm-c:focus{border-color:#bfdbfe;background:#f8faff;outlin
 .it-meta{display:flex;gap:5px;align-items:center;flex-shrink:0;flex-wrap:wrap}
 .it-pct{font-size:11px;color:#94a3b8;white-space:nowrap;min-width:52px;text-align:right;font-weight:500}
 .it-fecha{font-size:10px;color:#10b981;white-space:nowrap;font-weight:600}
-.it-del{opacity:0;transition:opacity .15s;transform:scale(.9)}
-.it-row:hover .it-del{opacity:1;transform:scale(1)}
+.it-del{opacity:0.25;transition:opacity .15s;transform:scale(1)}
+.it-row:hover .it-del{opacity:1}
 .it-body{padding:10px 18px 16px;background:#f8fbff;border-top:1px solid #dbeafe;border-left:3px solid #305496}
 .it-body-c{padding:10px 18px 14px;background:#f8fbff;border-top:1px solid #dbeafe;border-left:3px solid #305496}
 .it-count{font-size:11px;color:#305496;background:#dbeafe;border-radius:10px;padding:2px 9px;font-weight:600}
@@ -221,9 +221,9 @@ button.btn-save.guardado{background:#059669;color:#fff;border-color:#059669}
 
     <div class="actbar">
       <button class="add-main" id="btn-add" onclick="addItem()">+ Nuevo Cliente</button>
-      <button class="sec" onclick="exportJSON()">💾 Backup</button>
-      <button class="sec" id="btn-undo" onclick="undo()" style="display:none;background:#1d4ed8;border-color:#3b82f6;color:#fff;font-weight:700">↩ Deshacer</button>
-      <button class="sec" onclick="document.getElementById('imp').click()">📂 Importar</button>
+      <button class="sec" onclick="exportJSON()">Backup</button>
+      <button class="sec" id="btn-undo" onclick="undo()" style="display:none;background:#1d4ed8;border-color:#3b82f6;color:#fff;font-weight:700">« Deshacer</button>
+      <button class="sec" onclick="document.getElementById('imp').click()">Importar</button>
       <span class="saved" id="saved"></span>
       <input type="file" id="imp" accept=".json" style="display:none" onchange="importJSON(event)">
     </div>
@@ -441,7 +441,7 @@ function subscribeRealtime(){
         else{clienteActual=null;vistaActual='clientes';}
       }
       renderVista();
-      showSaved('↻ Actualizado por otro usuario');
+      showSaved('⟳ Actualizado');
     })
     .subscribe(status=>{
       const ok=status==='SUBSCRIBED';
@@ -728,9 +728,9 @@ function renderProyectos(ci){
           <select class="est-abono ${(p.abono||'Sin Abono')==='Abono'?'abono-Con':'abono-Sin'}" data-path="${ci}|p|${pi}" data-k="abono" onclick="event.stopPropagation()">${opt(OPCIONES_ABONO,p.abono||'Sin Abono')}</select>
           <span class="it-pct">${pct}% · ${total}t</span>
           ${p.fechaTerminado?`<span class="it-fecha">✓ ${p.fechaTerminado}</span>`:''}
-          <button class="btn-save it-del" style="opacity:0" onclick="event.stopPropagation();guardarAhora(this)" title="Guardar proyecto">✓</button>
-          <button class="add it-del" style="opacity:0;font-size:10px;padding:2px 6px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})" title="Nueva tarea">+Tarea</button>
-          <button class="add it-del" style="opacity:0;font-size:10px;padding:2px 6px;border-color:#bae6fd;color:#0369a1" onclick="event.stopPropagation();quickAddSub(${ci},${pi})" title="Nuevo subpunto">+Sub</button>
+          <button class="btn-save it-del" style="" onclick="event.stopPropagation();guardarAhora(this)" title="Guardar proyecto">✓</button>
+          <button class="add it-del" style="font-size:10px;padding:2px 6px" onclick="event.stopPropagation();quickAddTarea(${ci},${pi})" title="Nueva tarea">+Tarea</button>
+          <button class="add it-del" style="font-size:10px;padding:2px 6px;border-color:#bae6fd;color:#0369a1" onclick="event.stopPropagation();quickAddSub(${ci},${pi})" title="Nuevo subpunto">+Sub</button>
           <button class="del it-del" onclick="event.stopPropagation();delProyecto(${ci},${pi})">✕</button>
         </div>
       </div>
@@ -787,7 +787,7 @@ function renderVista(){
 // EVENTOS DE EDICIÓN
 // ============================================================
 function _onRootChange(ev){const t=ev.target;if(!t.dataset.path)return;applyEdit(t.dataset.path,t.dataset.k,t.value);save();renderVista();}
-function _onRootInput(ev){const t=ev.target;if(!t.dataset.path||t.tagName==='SELECT')return;applyEdit(t.dataset.path,t.dataset.k,t.value);clearTimeout(window._it);window._it=setTimeout(save,2000);}
+function _onRootInput(ev){const t=ev.target;if(!t.dataset.path||t.tagName==='SELECT')return;applyEdit(t.dataset.path,t.dataset.k,t.value);clearTimeout(window._it);window._it=setTimeout(save,8000);}
 let _eventsBound=false;
 function bindEvents(){
   if(_eventsBound)return;
@@ -833,7 +833,7 @@ function undo(){
   clienteActual=prev.clienteActual;
   updateUndoBtn();
   save();renderVista();
-  showSaved('↩ Deshecho');
+  showSaved('« Deshecho');
 }
 function updateUndoBtn(){
   const b=document.getElementById('btn-undo');
