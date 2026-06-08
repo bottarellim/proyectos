@@ -6,7 +6,7 @@
 body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;margin:0;background:linear-gradient(160deg,#1e3a6e 0%,#254282 60%,#1a3060 100%);min-height:100vh;color:#1f2937;font-size:13px}
 
 /* === Login === */
-#login-screen{position:fixed;inset:0;background:transparent;display:flex;align-items:center;justify-content:center;z-index:999}
+#login-screen{position:fixed;inset:0;background:transparent;display:none;align-items:center;justify-content:center;z-index:999}
 .login-box{background:#fff;border-radius:16px;box-shadow:0 20px 60px rgba(0,0,0,.3);padding:48px 40px;width:360px;text-align:center}
 .login-box h2{margin:0 0 4px;font-size:28px;color:#1e3a6e;font-weight:800;letter-spacing:-.5px}
 .login-box p{color:#6b7280;font-size:13px;margin:0 0 28px}
@@ -19,7 +19,7 @@ body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;margin:0;backgrou
 #l-err{color:#dc2626;font-size:12px;margin-top:10px;min-height:18px}
 
 /* === App === */
-#app{display:none;max-width:1140px;margin:0 auto;padding:0}
+#app{display:block;max-width:1140px;margin:0 auto;padding:0}
 .app-header{background:linear-gradient(135deg,#1e3a6e 0%,#305496 100%);padding:14px 24px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;box-shadow:0 2px 12px rgba(30,58,110,.3)}
 .topbar{display:flex;align-items:center;gap:10px;flex:1;flex-wrap:wrap}
 .topbar-logo{font-size:20px;font-weight:800;color:#fff;margin:0;flex-shrink:0;letter-spacing:-.3px}
@@ -252,61 +252,17 @@ const SUPABASE_URL = 'https://ftpcqmzgpvzhwrckqlii.supabase.co';
 const SUPABASE_KEY = 'sb_publishable_wNpK1pS7uhnHKp9AOEzskA_5j8U9dD6';
 // ============================================================
 
-let sb;
-function initApp(){
-  if(!window.supabase){document.getElementById('l-err').textContent='Error: librería no disponible. Recargá.';return;}
-  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
-  sb.auth.onAuthStateChange(async(event,session)=>{
-    if(event==='SIGNED_IN'&&session){
-      document.getElementById('login-screen').style.display='none';
-      document.getElementById('app').style.display='block';
-      document.getElementById('user-email').textContent=session.user.email;
-      subscribeRealtime();
-      await initData();
-    }
-    if(event==='SIGNED_OUT'){
-      document.getElementById('login-screen').style.display='flex';
-      document.getElementById('app').style.display='none';
-      document.getElementById('l-btn').textContent='Ingresar';
-      document.getElementById('l-btn').disabled=false;
-    }
-  });
-}
-// initApp se llama al final del script
+const sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_KEY);
+
+
 
 // ============================================================
-// AUTH
+// INICIO DE LA APP — sin autenticación
 // ============================================================
-async function doLogin(){
-  const btn=document.getElementById('l-btn');
-  const err=document.getElementById('l-err');
-  const email=document.getElementById('l-email').value.trim();
-  const pass=document.getElementById('l-pass').value;
-  if(!email||!pass){err.textContent='Completá email y contraseña.';return;}
-  btn.textContent='Ingresando...';btn.disabled=true;err.textContent='';
-  const {error}=await sb.auth.signInWithPassword({email,password:pass});
-  if(error){
-    err.textContent=error.message.includes('Invalid')?'Email o contraseña incorrectos':error.message;
-    btn.textContent='Ingresar';btn.disabled=false;
-  }
-}
-
-async function doLogout(){
-  await sb.auth.signOut();
-}
-
-// ============================================================
-// INICIO DE LA APP
-// ============================================================
-if(window.supabase){
-  initApp();
-} else {
-  var _fb=document.createElement('script');
-  _fb.src='https://unpkg.com/@supabase/supabase-js@2';
-  _fb.onload=function(){initApp();};
-  _fb.onerror=function(){document.getElementById('l-err').textContent='Error de conexión. Verificá tu red y recargá la página.';};
-  document.head.appendChild(_fb);
-}
+document.addEventListener('DOMContentLoaded',async function(){
+  subscribeRealtime();
+  await initData();
+});
 
 // ============================================================
 // CONSTANTES
@@ -957,4 +913,26 @@ function delSub(path){
   save();renderVista();
 }
 
-// ================================================                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                   
+// ============================================================
+// ============================================================
+function exportJSON(){
+  const blob=new Blob([JSON.stringify({clientes},null,2)],{type:'application/json'});
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+  a.download='ciaber_backup_'+new Date().toISOString().slice(0,10)+'.json';a.click();
+}
+function importJSON(ev){
+  const f=ev.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=e=>{
+    try{
+      const d=JSON.parse(e.target.result);
+      if(d.clientes)clientes=fixClientes(d.clientes);
+      else if(Array.isArray(d))clientes=migrarDesdeFormatoViejo(d);
+      save();renderVista();alert('Importado correctamente.');
+    }catch(err){alert('Archivo inválido: '+err.message);}
+  };r.readAsText(f);
+}
+
+</script>
+</body>
+</html>
