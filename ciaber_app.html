@@ -549,7 +549,7 @@ function getAdjArr(ci,pi,ti){
 }
 
 function pctOf(arr){let t=0,h=0;arr.forEach(x=>{t++;if(x.estado==='Terminado')h++;(x.subtareas||[]).forEach(s=>{t++;if(s.estado==='Terminado')h++;});});return t?Math.round(h*100/t):0;}
-function allTareasProy(p){if(p.subpuntos&&p.subpuntos.length)return p.subpuntos.flatMap(s=>s.tareas||[]);return p.tareas||[];}
+function allTareasProy(p){return [...(p.tareas||[]),...(p.subpuntos||[]).flatMap(s=>s.tareas||[])];}
 
 // ============================================================
 // RENDER TAREAS
@@ -860,10 +860,10 @@ function guardarAhora(btn){
 function quickAddTarea(ci,pi){
   pushHistory();
   const p=clientes[ci].proyectos[pi];
-  // Si hay subpuntos, agregar al último; si no, a tareas directas
-  const arr=(p.subpuntos&&p.subpuntos.length)?p.subpuntos[p.subpuntos.length-1].tareas:p.tareas;
-  const nid=(arr.length+1).toString().padStart(2,'0');
-  arr.push({id:nid,tarea:'Nueva tarea',estado:'Pendiente',prioridad:'Media',adjuntos:[],subtareas:[]});
+  // Siempre agregar a tareas directas del proyecto (no a fases)
+  if(!p.tareas)p.tareas=[];
+  const nid=(p.tareas.length+1).toString().padStart(2,'0');
+  p.tareas.push({id:nid,tarea:'Nueva tarea',estado:'Pendiente',prioridad:'Media',adjuntos:[],subtareas:[]});
   expandedKeys.add('p-'+ci+'-'+pi);
   expandedKeys.add('tareas-'+ci+'-'+pi);
   save();renderVista();
