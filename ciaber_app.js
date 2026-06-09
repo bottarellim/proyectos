@@ -236,7 +236,25 @@ async function initData(retryN = 0) {
     if (myVersion !== _initVersion) return;
 
     if (row?.clientes && row.clientes.length > 0) {
-      clientes = fixClientes(row.clientes);
+      // Comparar timestamp local vs Supabase — usar el más nuevo
+      let useSupabase = true;
+      try {
+        const localRaw = localStorage.getItem('ciaber_v2');
+        if (localRaw) {
+          const localData = JSON.parse(localRaw);
+          const localTime = localData.savedAt || 0;
+          const supabaseTime = row.updated_at ? new Date(row.updated_at).getTime() : 0;
+          if (localTime > supabaseTime + 5000 && localData.clientes?.length) {
+            // Local es más de 5s más nuevo → fue editado mientras Supabase fallaba
+            console.log('initData: usando datos locales más nuevos y sincronizando a Supabase');
+            clientes = fixClientes(localData.clientes);
+            useSupabase = false;
+            // Sincronizar al servidor en background
+            setTimeout(() => saveToSupabase(), 1000);
+          }
+        }
+      } catch (e) {}
+      if (useSupabase) clientes = fixClientes(row.clientes);
     } else {
       // Supabase vacío — usar localStorage o crear estructura inicial
       const localV2 = localStorage.getItem('ciaber_v2');
@@ -335,13 +353,17 @@ async function saveToSupabase() {
 }
 
 function save() {
+  // CRÍTICO: guardar en localStorage INMEDIATAMENTE, antes de esperar Supabase.
+  // Así, si la red falla, el cache local siempre tiene los datos más recientes.
+  if (clientes && clientes.length) {
+    localStorage.setItem('ciaber_v2', JSON.stringify({ clientes, savedAt: Date.now() }));
+  }
   showSaved('⏳ Guardando...');
   saveToSupabase().then(ok => {
     if (ok) showSaved('✓ Guardado ' + new Date().toLocaleTimeString());
     else {
-      // Limpiar el spinner si saveToSupabase no puso otro mensaje
       const s = document.getElementById('saved');
-      if (s && s.textContent === '⏳ Guardando...') showSaved('');
+      if (s && s.textContent === '⏳ Guardando...') showSaved('⚠ Sin conexión — guardado local');
     }
   });
 }
